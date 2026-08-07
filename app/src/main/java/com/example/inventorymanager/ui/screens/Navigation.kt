@@ -1,0 +1,214 @@
+package com.example.inventorymanager.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.outlined.AddCircle
+import androidx.compose.material.icons.outlined.Assessment
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.ui.graphics.Color
+import com.example.inventorymanager.data.InventoryItem
+
+sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
+    object Home : Screen("home", "Home", Icons.Outlined.Home)
+    object Sales : Screen("sales", "Sales", Icons.Outlined.Payments)
+    object Post : Screen("post", "Post", Icons.Outlined.AddCircle)
+    object Inventory : Screen("inventory", "Inventory", Icons.Outlined.Inventory2)
+    object Reports : Screen("reports", "Reports", Icons.Outlined.Assessment)
+}
+
+@Composable
+fun MainNavigationContainer(
+    emptiesCount: Int,
+    stockCount: Int,
+    salesCount: Int,
+    items: List<InventoryItem>,
+    onSaveProduct: (InventoryItem) -> Unit,
+    onReconcile: (Map<Int, Int>) -> Unit,
+    lastUpdated: String = "Just now"
+) {
+    val navController = rememberNavController()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Home.route
+
+    val screens = listOf(
+        Screen.Home,
+        Screen.Sales,
+        Screen.Post,
+        Screen.Inventory,
+        Screen.Reports
+    )
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar(containerColor = Color.Transparent) {
+                screens.forEach { screen ->
+                    val isSelected = currentRoute == screen.route
+                    NavigationBarItem(
+                        selected = isSelected,
+                        onClick = {
+                            if (currentRoute != screen.route) {
+                                navController.navigate(screen.route) {
+                                    popUpTo(navController.graph.startDestinationId) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                        },
+                        icon = { Icon(screen.icon, contentDescription = screen.label) },
+                        label = {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = screen.label,
+                                    style = if (isSelected) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelMedium
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .padding(top = 2.dp)
+                                        .width(35.dp)
+                                        .height(3.dp)
+                                        .background(
+                                            if (isSelected) Color(0xFFD32F2F) else Color.Transparent
+                                        )
+                                )
+                            }
+                        },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFFD32F2F),
+                            selectedTextColor = Color(0xFFD32F2F),
+                            indicatorColor = Color.Transparent,
+                            unselectedIconColor = Color.Gray,
+                            unselectedTextColor = Color.Gray,
+
+                        )
+                    )
+                }
+            }
+        }
+    ) { innerPadding ->
+        AppNavHost(
+            navController = navController,
+            modifier = Modifier.padding(innerPadding),
+            emptiesCount = emptiesCount,
+            stockCount = stockCount,
+            salesCount = salesCount,
+            items = items,
+            onSaveProduct = onSaveProduct,
+            onReconcile = onReconcile,
+            onNavigateToInventory = {
+                navController.navigate(Screen.Inventory.route) {
+                    popUpTo(Screen.Home.route)
+                }
+            },
+            onNavigateBack = {
+                navController.popBackStack()
+            },
+            lastUpdated = lastUpdated
+        )
+    }
+}
+
+@Composable
+fun AppNavHost(
+    navController: NavHostController,
+    modifier: Modifier = Modifier,
+    emptiesCount: Int,
+    stockCount: Int,
+    salesCount: Int,
+    items: List<InventoryItem>,
+    onSaveProduct: (InventoryItem) -> Unit,
+    onReconcile: (Map<Int, Int>) -> Unit,
+    onNavigateToInventory: () -> Unit,
+    onNavigateBack: () -> Unit,
+    lastUpdated: String
+) {
+    NavHost(
+        navController = navController,
+        startDestination = Screen.Home.route,
+        modifier = modifier
+    ) {
+        composable(Screen.Home.route) {
+            DashBoardScreen(
+                emptiesCount = emptiesCount,
+                salesCount = salesCount,
+                stockCount = stockCount,
+                lastUpdated = lastUpdated,
+                modifier = Modifier // Padding is handled by the NavHost modifier
+            )
+        }
+        composable(Screen.Sales.route) {
+            SalesScreen(
+                items = items,
+                onConfirmReconciliation = { results ->
+                    onReconcile(results)
+                    onNavigateToInventory()
+                }
+            )
+        }
+        composable(Screen.Post.route) {
+            AddProductScreen(
+                onSave = { 
+                    onSaveProduct(it)
+                    onNavigateToInventory()
+                },
+                onBack = onNavigateBack,
+                modifier = Modifier // Padding is handled by the NavHost modifier
+            )
+        }
+        composable(Screen.Inventory.route) {
+            InventoryListScreen(
+                items = items,
+                onAddClick = { navController.navigate(Screen.Post.route) },
+                modifier = Modifier // Padding is handled by the NavHost modifier
+            )
+        }
+        composable(Screen.Reports.route) {
+            Text("Reports Screen Content", modifier = Modifier.padding(16.dp))
+        }
+    }
+}
+
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true)
+@Composable
+fun MainNavigationPreview() {
+    val sampleItems = listOf(
+        InventoryItem(1, "Sample 1", 10, 100.0, category = "Plastics"),
+        InventoryItem(2, "Sample 2", 5, 200.0, category = "Glass")
+    )
+    com.example.inventorymanager.ui.theme.InventoryManagerTheme {
+        MainNavigationContainer(
+            emptiesCount = 40,
+            stockCount = 400,
+            salesCount = 1000000,
+            items = sampleItems,
+            onSaveProduct = {},
+            onReconcile = {}
+        )
+    }
+}

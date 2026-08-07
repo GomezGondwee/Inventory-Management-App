@@ -1,0 +1,5 @@
+- [x] Add search state and text field to `ReconciliationScreen.kt`
+- [x] Implement grouping logic in `ReconciliationScreen`
+- [x] Update `LazyColumn` to display headers and grouped items
+- [x] Enhance `ReconciliationItemRow` with icons and prices
+- [x] Verify build and functionality
