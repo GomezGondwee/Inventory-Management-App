@@ -1,15 +1,27 @@
+# IDE files
+.idea/
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+.kotlin/
+.artifacts/
+
+# Gradle files
+.gradle/
+build/
+app/build/
+
+# Local configuration
 local.properties
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Output files
+captures/
+*.apk
+*.aar
+*.jar
+
+# External Native Build
+.externalNativeBuild/
+.cxx/
