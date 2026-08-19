@@ -72,6 +72,14 @@ fun InventoryListScreen(
 
     Scaffold(
         modifier = modifier,
+        topBar = {
+            TopAppBar(
+                title = { Text(Screen.Inventory.label) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onAddClick,
@@ -88,15 +96,6 @@ fun InventoryListScreen(
                 .padding(innerPadding)
                 .fillMaxSize()
         ) {
-            Text(
-                text = Screen.Inventory.label,
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },

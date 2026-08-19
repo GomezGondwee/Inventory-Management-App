@@ -6,5 +6,6 @@ data class InventoryItem(
     val quantity: Int,
     val price: Double,
     val imageUri: String? = null,
-    val category: String
+    val category: String,
+    val totalSold: Int = 0
 )
