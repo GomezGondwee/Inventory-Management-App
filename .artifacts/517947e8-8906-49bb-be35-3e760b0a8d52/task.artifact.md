@@ -1,5 +1,5 @@
-- [x] Add search state and text field to `ReconciliationScreen.kt`
-- [x] Implement grouping logic in `ReconciliationScreen`
-- [x] Update `LazyColumn` to display headers and grouped items
-- [x] Enhance `ReconciliationItemRow` with icons and prices
-- [x] Verify build and functionality
+- [x] Add `TopAppBar` to `InventoryListScreen.kt`
+- [x] Add `TopAppBar` to `ReportsScreen.kt`
+- [x] Refine `NavigationBar` logic in `Navigation.kt`
+- [x] Add missing `INTERNET` permission to `AndroidManifest.xml`
+- [/] Verify navigation routing manually on device

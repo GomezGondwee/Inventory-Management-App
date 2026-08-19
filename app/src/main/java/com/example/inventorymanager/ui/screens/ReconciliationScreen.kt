@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Liquor
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.WineBar
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -30,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -45,6 +47,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.inventorymanager.data.InventoryItem
+import com.example.inventorymanager.logic.SalesManager
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -55,6 +58,7 @@ fun ReconciliationScreen(
 ) {
     var searchQuery by remember { mutableStateOf("") }
     val remainingStockInputs = remember { mutableStateMapOf<Int, String>() }
+    var showConfirmationDialog by remember { mutableStateOf(false) }
 
     // Filter and Group items
     val groupedItems = items
@@ -93,11 +97,13 @@ fun ReconciliationScreen(
                     }
                     Button(
                         onClick = {
-                            val results = items.associate { item ->
-                                val remaining = remainingStockInputs[item.id]?.toIntOrNull() ?: item.quantity
-                                item.id to remaining
+                            val allValid = items.all { item ->
+                                val input = remainingStockInputs[item.id] ?: ""
+                                SalesManager.validateStockInput(input, item.quantity)
                             }
-                            onConfirm(results)
+                            if (allValid) {
+                                showConfirmationDialog = true
+                            }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -166,6 +172,52 @@ fun ReconciliationScreen(
             }
         }
     }
+
+    if (showConfirmationDialog) {
+        val reconciliationResults = SalesManager.calculateReconciliation(
+            updateMap = items.associate { item ->
+                val remaining = remainingStockInputs[item.id]?.toIntOrNull() ?: item.quantity
+                item.id to remaining
+            },
+            currentItems = items
+        )
+
+        AlertDialog(
+            onDismissRequest = { showConfirmationDialog = false },
+            title = { Text("Reconciliation Summary") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Total Revenue: $${String.format(Locale.getDefault(), "%.2f", reconciliationResults.addedRevenue)}")
+                    Text("Total Items Sold: ${reconciliationResults.itemsSold}")
+                    Text("New Empties Recorded: ${reconciliationResults.addedEmpties}")
+                    Text(
+                        "Are you sure you want to finalize this session?",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val results = items.associate { item ->
+                            val remaining = remainingStockInputs[item.id]?.toIntOrNull() ?: item.quantity
+                            item.id to remaining
+                        }
+                        onConfirm(results)
+                        showConfirmationDialog = false
+                    }
+                ) {
+                    Text("Finalize")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmationDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -216,6 +268,8 @@ fun ReconciliationItemRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                val isError = !SalesManager.validateStockInput(currentInput, item.quantity)
+                
                 OutlinedTextField(
                     value = currentInput,
                     onValueChange = onInputChange,
@@ -223,7 +277,11 @@ fun ReconciliationItemRow(
                     modifier = Modifier.weight(1f),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     placeholder = { Text(item.quantity.toString()) },
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    isError = isError,
+                    supportingText = if (isError) {
+                        { Text("Cannot exceed ${item.quantity}") }
+                    } else null
                 )
 
                 Column(horizontalAlignment = Alignment.End) {

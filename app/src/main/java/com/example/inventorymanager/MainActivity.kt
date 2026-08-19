@@ -59,6 +59,16 @@ class MainActivity : ComponentActivity() {
                         salesCount += result.addedRevenue.toInt()
                         emptiesCount += result.addedEmpties
                         stockCount = sampleItems.sumOf { it.quantity }
+                    },
+                    onReceiveDelivery = { deliveryMap ->
+                        deliveryMap.forEach { (itemId, receivedQuantity) ->
+                            val index = sampleItems.indexOfFirst { it.id == itemId }
+                            if (index != -1) {
+                                val item = sampleItems[index]
+                                sampleItems[index] = item.copy(quantity = item.quantity + receivedQuantity)
+                            }
+                        }
+                        stockCount = sampleItems.sumOf { it.quantity }
                     }
                 )
             }

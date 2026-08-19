@@ -28,6 +28,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.LocalShipping
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.ui.graphics.Color
@@ -39,6 +40,7 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object Post : Screen("post", "Post", Icons.Outlined.AddCircle)
     object Inventory : Screen("inventory", "Inventory", Icons.Outlined.Inventory2)
     object Reports : Screen("reports", "Reports", Icons.Outlined.Assessment)
+    object Delivery : Screen("delivery", "Delivery", Icons.Outlined.LocalShipping)
 }
 
 @Composable
@@ -49,6 +51,7 @@ fun MainNavigationContainer(
     items: List<InventoryItem>,
     onSaveProduct: (InventoryItem) -> Unit,
     onReconcile: (Map<Int, Int>) -> Unit,
+    onReceiveDelivery: (Map<Int, Int>) -> Unit,
     lastUpdated: String = "Just now"
 ) {
     val navController = rememberNavController()
@@ -71,6 +74,7 @@ fun MainNavigationContainer(
                     NavigationBarItem(
                         selected = isSelected,
                         onClick = {
+                            println("Navigating to: ${screen.route}")
                             if (currentRoute != screen.route) {
                                 navController.navigate(screen.route) {
                                     popUpTo(navController.graph.startDestinationId) {
@@ -121,10 +125,14 @@ fun MainNavigationContainer(
             items = items,
             onSaveProduct = onSaveProduct,
             onReconcile = onReconcile,
+            onReceiveDelivery = onReceiveDelivery,
             onNavigateToInventory = {
                 navController.navigate(Screen.Inventory.route) {
                     popUpTo(Screen.Home.route)
                 }
+            },
+            onNavigateToDelivery = {
+                navController.navigate(Screen.Delivery.route)
             },
             onNavigateBack = {
                 navController.popBackStack()
@@ -144,7 +152,9 @@ fun AppNavHost(
     items: List<InventoryItem>,
     onSaveProduct: (InventoryItem) -> Unit,
     onReconcile: (Map<Int, Int>) -> Unit,
+    onReceiveDelivery: (Map<Int, Int>) -> Unit,
     onNavigateToInventory: () -> Unit,
+    onNavigateToDelivery: () -> Unit,
     onNavigateBack: () -> Unit,
     lastUpdated: String
 ) {
@@ -159,6 +169,7 @@ fun AppNavHost(
                 salesCount = salesCount,
                 stockCount = stockCount,
                 lastUpdated = lastUpdated,
+                onReceiveDeliveryClick = onNavigateToDelivery,
                 modifier = Modifier // Padding is handled by the NavHost modifier
             )
         }
@@ -189,7 +200,17 @@ fun AppNavHost(
             )
         }
         composable(Screen.Reports.route) {
-            Text("Reports Screen Content", modifier = Modifier.padding(16.dp))
+            ReportsScreen(items = items)
+        }
+        composable(Screen.Delivery.route) {
+            DeliveryScreen(
+                items = items,
+                onConfirmDelivery = { results ->
+                    onReceiveDelivery(results)
+                    onNavigateToInventory()
+                },
+                onBack = onNavigateBack
+            )
         }
     }
 }
@@ -208,7 +229,8 @@ fun MainNavigationPreview() {
             salesCount = 1000000,
             items = sampleItems,
             onSaveProduct = {},
-            onReconcile = {}
+            onReconcile = {},
+            onReceiveDelivery = {}
         )
     }
 }
