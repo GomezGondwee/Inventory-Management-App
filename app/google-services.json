@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "233929665311",
+    "project_id": "inventory-management-app-79495",
+    "storage_bucket": "inventory-management-app-79495.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:233929665311:android:57e99fbe5bfda8029cde2a",
+        "android_client_info": {
+          "package_name": "com.buyu.inventorymanager"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "233929665311-6b9u7okglc5stc6rm8m3de7o59590ka0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.buyu.inventorymanager",
+            "certificate_hash": "305a46bde08ed56708fdc85ce88c043964da4b90"
+          }
+        },
+        {
+          "client_id": "233929665311-hvo9g5k1r4fcfgl6j5fq6umb2h4p1duk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAGDN8XZtev12klvvpg8VRnwdqqjgHwvJw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "233929665311-hvo9g5k1r4fcfgl6j5fq6umb2h4p1duk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
