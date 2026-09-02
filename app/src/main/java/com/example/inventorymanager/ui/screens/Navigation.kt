@@ -18,6 +18,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -50,8 +53,10 @@ fun MainNavigationContainer(
     salesCount: Int,
     items: List<InventoryItem>,
     onSaveProduct: (InventoryItem) -> Unit,
-    onReconcile: (Map<Int, Int>) -> Unit,
-    onReceiveDelivery: (Map<Int, Int>) -> Unit,
+    onDeleteProduct: (String) -> Unit,
+    onReconcile: (Map<String, Int>, Double, Int) -> Unit,
+    onReceiveDelivery: (Map<String, Int>) -> Unit,
+    onSignOut: () -> Unit,
     lastUpdated: String = "Just now"
 ) {
     val navController = rememberNavController()
@@ -124,8 +129,10 @@ fun MainNavigationContainer(
             salesCount = salesCount,
             items = items,
             onSaveProduct = onSaveProduct,
+            onDeleteProduct = onDeleteProduct,
             onReconcile = onReconcile,
             onReceiveDelivery = onReceiveDelivery,
+            onSignOut = onSignOut,
             onNavigateToInventory = {
                 navController.navigate(Screen.Inventory.route) {
                     popUpTo(Screen.Home.route)
@@ -151,13 +158,17 @@ fun AppNavHost(
     salesCount: Int,
     items: List<InventoryItem>,
     onSaveProduct: (InventoryItem) -> Unit,
-    onReconcile: (Map<Int, Int>) -> Unit,
-    onReceiveDelivery: (Map<Int, Int>) -> Unit,
+    onDeleteProduct: (String) -> Unit,
+    onReconcile: (Map<String, Int>, Double, Int) -> Unit,
+    onReceiveDelivery: (Map<String, Int>) -> Unit,
+    onSignOut: () -> Unit,
     onNavigateToInventory: () -> Unit,
     onNavigateToDelivery: () -> Unit,
     onNavigateBack: () -> Unit,
     lastUpdated: String
 ) {
+    var itemToEdit by remember { mutableStateOf<InventoryItem?>(null) }
+
     NavHost(
         navController = navController,
         startDestination = Screen.Home.route,
@@ -170,37 +181,56 @@ fun AppNavHost(
                 stockCount = stockCount,
                 lastUpdated = lastUpdated,
                 onReceiveDeliveryClick = onNavigateToDelivery,
+                onSignOut = onSignOut,
                 modifier = Modifier // Padding is handled by the NavHost modifier
             )
         }
         composable(Screen.Sales.route) {
             SalesScreen(
                 items = items,
-                onConfirmReconciliation = { results ->
-                    onReconcile(results)
+                onConfirmReconciliation = { results, revenue, empties ->
+                    onReconcile(results, revenue, empties)
                     onNavigateToInventory()
-                }
+                },
+                onBack = onNavigateBack
             )
         }
         composable(Screen.Post.route) {
             AddProductScreen(
+                initialItem = itemToEdit,
                 onSave = { 
                     onSaveProduct(it)
+                    itemToEdit = null
                     onNavigateToInventory()
                 },
-                onBack = onNavigateBack,
+                onBack = {
+                    itemToEdit = null
+                    onNavigateBack()
+                },
                 modifier = Modifier // Padding is handled by the NavHost modifier
             )
         }
         composable(Screen.Inventory.route) {
             InventoryListScreen(
                 items = items,
-                onAddClick = { navController.navigate(Screen.Post.route) },
-                modifier = Modifier // Padding is handled by the NavHost modifier
+                onAddClick = { 
+                    itemToEdit = null
+                    navController.navigate(Screen.Post.route) 
+                },
+                onEditClick = { item ->
+                    itemToEdit = item
+                    navController.navigate(Screen.Post.route)
+                },
+                onDeleteClick = onDeleteProduct,
+                onBack = onNavigateBack,
+                modifier = Modifier 
             )
         }
         composable(Screen.Reports.route) {
-            ReportsScreen(items = items)
+            ReportsScreen(
+                items = items,
+                onBack = onNavigateBack
+            )
         }
         composable(Screen.Delivery.route) {
             DeliveryScreen(
@@ -219,8 +249,8 @@ fun AppNavHost(
 @Composable
 fun MainNavigationPreview() {
     val sampleItems = listOf(
-        InventoryItem(1, "Sample 1", 10, 100.0, category = "Plastics"),
-        InventoryItem(2, "Sample 2", 5, 200.0, category = "Glass")
+        InventoryItem("1", "Sample 1", 10, 100.0, category = "Plastics"),
+        InventoryItem("2", "Sample 2", 5, 200.0, category = "Glass")
     )
     com.example.inventorymanager.ui.theme.InventoryManagerTheme {
         MainNavigationContainer(
@@ -229,8 +259,10 @@ fun MainNavigationPreview() {
             salesCount = 1000000,
             items = sampleItems,
             onSaveProduct = {},
-            onReconcile = {},
-            onReceiveDelivery = {}
+            onDeleteProduct = {},
+            onReconcile = { _, _, _ -> },
+            onReceiveDelivery = {},
+            onSignOut = {}
         )
     }
 }

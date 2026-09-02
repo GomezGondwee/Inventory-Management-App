@@ -1,74 +1,101 @@
 package com.example.inventorymanager
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import com.example.inventorymanager.data.InventoryItem
+import androidx.compose.runtime.rememberCoroutineScope
+import com.example.inventorymanager.data.ProductRepository
+import com.example.inventorymanager.data.DashboardStats
 import com.example.inventorymanager.logic.SalesManager
 import com.example.inventorymanager.ui.screens.MainNavigationContainer
 import com.example.inventorymanager.ui.theme.InventoryManagerTheme
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        if (FirebaseAuth.getInstance().currentUser == null) {
+            val intent = Intent(this, LoginActivity::class.java)
+            startActivity(intent)
+            finish()
+            return
+        }
+
         enableEdgeToEdge()
 
         setContent {
             InventoryManagerTheme {
-                // Dashboard state
-                var emptiesCount by remember { mutableIntStateOf(40) }
-                var stockCount by remember { mutableIntStateOf(400) }
-                var salesCount by remember { mutableIntStateOf(1000000) }
+                val repository = remember { ProductRepository() }
+                val scope = rememberCoroutineScope()
 
-                // Inventory state
-                val sampleItems = remember {
-                    mutableStateListOf(
-                        InventoryItem(1, "Coke", 5, 19350.00, "https://example.com/coke.png", "Plastics"),
-                        InventoryItem(2, "Orange", 10, 19350.00, category = "Plastics"),
-                        InventoryItem(3, "Passion", 25, 19350.00, "https://example.com/passion.png", "Glass"),
-                        InventoryItem(4, "Pina", 8, 17250.00, category = "Glass"),
-                        InventoryItem(5, "Plum", 15, 17250.00, category = "Plastics")
-                    )
-                }
+                val items by repository.getProducts().collectAsState(initial = emptyList())
+                val stats by repository.getDashboardStats().collectAsState(initial = null)
+
+                val salesCount = stats?.totalRevenue?.toInt() ?: 0
+                val emptiesCount = stats?.totalEmpties ?: 0
+                val stockCount = items.sumOf { it.quantity }
 
                 MainNavigationContainer(
                     emptiesCount = emptiesCount,
                     stockCount = stockCount,
                     salesCount = salesCount,
-                    items = sampleItems,
+                    items = items,
                     onSaveProduct = { newItem ->
-                        sampleItems.add(newItem)
-                    },
-                    onReconcile = { updateMap ->
-                        val result = SalesManager.calculateReconciliation(
-                            updateMap = updateMap,
-                            currentItems = sampleItems
-                        )
+                        scope.launch {
+                            var finalItem = newItem
+                            
+                            newItem.imageUri?.let { uriString ->
+                                if (uriString.startsWith("file://")) {
+                                    val uploadResult = repository.uploadImage(uriString.removePrefix("file://"))
+                                    if (uploadResult.isSuccess) {
+                                        finalItem = newItem.copy(imageUri = uploadResult.getOrNull())
+                                    }
+                                }
+                            }
 
-                        // Update inventory state
-                        sampleItems.clear()
-                        sampleItems.addAll(result.updatedItems)
-
-                        // Update global dashboard stats
-                        salesCount += result.addedRevenue.toInt()
-                        emptiesCount += result.addedEmpties
-                        stockCount = sampleItems.sumOf { it.quantity }
-                    },
-                    onReceiveDelivery = { deliveryMap ->
-                        deliveryMap.forEach { (itemId, receivedQuantity) ->
-                            val index = sampleItems.indexOfFirst { it.id == itemId }
-                            if (index != -1) {
-                                val item = sampleItems[index]
-                                sampleItems[index] = item.copy(quantity = item.quantity + receivedQuantity)
+                            if (finalItem.id.isNotEmpty()) {
+                                repository.updateProduct(finalItem)
+                            } else {
+                                repository.addProduct(finalItem)
                             }
                         }
-                        stockCount = sampleItems.sumOf { it.quantity }
+                    },
+                    onDeleteProduct = { productId ->
+                        scope.launch {
+                            repository.deleteProduct(productId)
+                        }
+                    },
+                    onReconcile = { updateMap, revenue, empties ->
+                        val result = SalesManager.calculateReconciliation(
+                            updateMap = updateMap,
+                            currentItems = items
+                        )
+                        scope.launch {
+                            repository.saveReconciliation(
+                                totalRevenue = revenue,
+                                totalEmpties = empties,
+                                updatedItems = result.updatedItems
+                            )
+                        }
+                    },
+                    onReceiveDelivery = { deliveryMap ->
+                        scope.launch {
+                            repository.receiveDelivery(deliveryMap)
+                        }
+                    },
+                    onSignOut = {
+                        FirebaseAuth.getInstance().signOut()
+                        val intent = Intent(this, LoginActivity::class.java)
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                        startActivity(intent)
+                        finish()
                     }
                 )
             }

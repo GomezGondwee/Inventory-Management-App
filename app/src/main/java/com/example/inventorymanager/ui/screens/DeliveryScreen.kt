@@ -23,12 +23,12 @@ import com.example.inventorymanager.data.InventoryItem
 @Composable
 fun DeliveryScreen(
     items: List<InventoryItem>,
-    onConfirmDelivery: (Map<Int, Int>) -> Unit,
+    onConfirmDelivery: (Map<String, Int>) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    val receivedQuantities = remember { mutableStateMapOf<Int, String>() }
+    val receivedQuantities = remember { mutableStateMapOf<String, String>() }
 
     val filteredItems = items.filter {
         it.name.contains(searchQuery, ignoreCase = true)
@@ -142,14 +142,3 @@ fun DeliveryItemRow(
     }
 }
 
-@Preview(showBackground = true)
-@Composable
-fun DeliveryScreenPreview() {
-    val sampleItems = listOf(
-        InventoryItem(1, "Coke", 24, 500.0, category = "Plastics"),
-        InventoryItem(2, "Water", 12, 600.0, category = "Plastics")
-    )
-    MaterialTheme {
-        DeliveryScreen(items = sampleItems, onConfirmDelivery = {}, onBack = {})
-    }
-}

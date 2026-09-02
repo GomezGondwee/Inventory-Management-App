@@ -17,13 +17,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Liquor
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.WineBar
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,6 +42,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -48,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -58,11 +66,16 @@ import com.example.inventorymanager.data.InventoryItem
 fun InventoryListScreen(
     items: List<InventoryItem>,
     onAddClick: () -> Unit,
+    onEditClick: (InventoryItem) -> Unit,
+    onDeleteClick: (String) -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
     val categories = listOf("All", "Plastics", "Glass")
     var selectedCategory by remember { mutableStateOf(categories[0]) }
+    
+    var itemToDelete by remember { mutableStateOf<InventoryItem?>(null) }
 
     val filteredItems = items.filter { item ->
         val matchesSearch = item.name.contains(searchQuery, ignoreCase = true)
@@ -75,6 +88,14 @@ fun InventoryListScreen(
         topBar = {
             TopAppBar(
                 title = { Text(Screen.Inventory.label) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -136,10 +157,38 @@ fun InventoryListScreen(
 
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(filteredItems) { item ->
-                    InventoryItemRow(item = item)
+                    InventoryItemRow(
+                        item = item,
+                        onEditClick = { onEditClick(item) },
+                        onDeleteClick = { itemToDelete = item }
+                    )
                 }
             }
         }
+    }
+
+    if (itemToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { itemToDelete = null },
+            title = { Text("Delete Product") },
+            text = { Text("Are you sure you want to delete ${itemToDelete?.name}? This action cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        itemToDelete?.id?.let { onDeleteClick(it) }
+                        itemToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { itemToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
@@ -147,17 +196,27 @@ fun InventoryListScreen(
 @Composable
 fun InventoryListScreenPreview() {
     val sampleItems = listOf(
-        InventoryItem(1, "Sample Item 1", 10, 19.99, category = "Plastics"),
-        InventoryItem(2, "Sample Item 2", 5, 29.99, category = "Glass"),
-        InventoryItem(3, "Sample Item 3", 0, 9.99, category = "Plastics")
+        InventoryItem("1", "Sample Item 1", 10, 19.99, category = "Plastics"),
+        InventoryItem("2", "Sample Item 2", 5, 29.99, category = "Glass"),
+        InventoryItem("3", "Sample Item 3", 0, 9.99, category = "Plastics")
     )
     MaterialTheme {
-        InventoryListScreen(items = sampleItems, onAddClick = {})
+        InventoryListScreen(
+            items = sampleItems,
+            onAddClick = {},
+            onEditClick = {},
+            onDeleteClick = {},
+            onBack = {}
+        )
     }
 }
 
 @Composable
-fun InventoryItemRow(item: InventoryItem) {
+fun InventoryItemRow(
+    item: InventoryItem,
+    onEditClick: () -> Unit,
+    onDeleteClick: () -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -234,17 +293,30 @@ fun InventoryItemRow(item: InventoryItem) {
                         )
                     }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onEditClick) {
                         Icon(
-                            Icons.Default.AttachMoney,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
                         )
+                    }
+
+                    IconButton(onClick = onDeleteClick) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = Color(0xFFD32F2F),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "${item.price}",
+                            text = "MK${item.price}",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.Gray
+                            color = Color.Gray,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }

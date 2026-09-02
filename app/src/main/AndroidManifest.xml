@@ -15,10 +15,14 @@
         android:theme="@style/Theme.InventoryManager">
         <activity
             android:name=".MainActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="@string/app_name"
             android:theme="@style/Theme.InventoryManager"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name=".LoginActivity"
+            android:exported="true"
+            android:theme="@style/Theme.InventoryManager">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

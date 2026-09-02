@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Liquor
 import androidx.compose.material.icons.filled.WineBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -54,11 +55,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.inventorymanager.data.InventoryItem
+import com.example.inventorymanager.ui.utils.ImageUtils
 
 @Composable
 fun CircleIcon(
@@ -86,29 +89,39 @@ fun CircleIcon(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddProductScreen(
+    initialItem: InventoryItem? = null,
     onSave: (InventoryItem) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var name by remember { mutableStateOf("") }
-    var quantity by remember { mutableStateOf("") }
-    var price by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf(initialItem?.name ?: "") }
+    var quantity by remember { mutableStateOf(initialItem?.quantity?.toString() ?: "") }
+    var price by remember { mutableStateOf(initialItem?.price?.toString() ?: "") }
     val categories = listOf("Plastics", "Glass")
-    var selectedCategory by remember { mutableStateOf(categories[0]) }
+    var selectedCategory by remember { mutableStateOf(initialItem?.category ?: categories[0]) }
     var expanded by remember { mutableStateOf(false) }
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(initialItem?.imageUri?.let { Uri.parse(it) }) }
 
     var nameError by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
-        onResult = { uri -> selectedImageUri = uri }
+        onResult = { uri -> 
+            uri?.let {
+                val localPath = ImageUtils.copyUriToInternalStorage(context, it)
+                if (localPath != null) {
+                    selectedImageUri = Uri.fromFile(java.io.File(localPath))
+                }
+            }
+        }
     )
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Add New Product") },
+                title = { Text(if (initialItem == null) "Add New Product" else "Edit Product") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -165,7 +178,7 @@ fun AddProductScreen(
             OutlinedTextField(
                 value = price,
                 onValueChange = { price = it },
-                label = { Text("Price") },
+                label = { Text("Price (MK)") },
                 leadingIcon = {
                     Box(modifier = Modifier.padding(start = 8.dp)) {
                         CircleIcon(Icons.Default.AttachMoney)
@@ -254,16 +267,18 @@ fun AddProductScreen(
             Button(
                 onClick = {
                     if (name.isNotBlank()) {
+                        isSaving = true
                         val q = quantity.toIntOrNull() ?: 0
                         val p = price.toDoubleOrNull() ?: 0.0
                         onSave(
                             InventoryItem(
-                                id = (100..999).random(), // Simple random ID for simulation
+                                id = initialItem?.id ?: "",
                                 name = name,
                                 quantity = q,
                                 price = p,
                                 category = selectedCategory,
-                                imageUri = selectedImageUri?.toString()
+                                imageUri = selectedImageUri?.toString(),
+                                totalSold = initialItem?.totalSold ?: 0
                             )
                         )
                     } else {
@@ -271,13 +286,22 @@ fun AddProductScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
+                enabled = !isSaving,
                 shape = RoundedCornerShape(4.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFD32F2F),
                     contentColor = Color.White
                 )
             ) {
-                Text("Save Product")
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(if (initialItem == null) "Save Product" else "Update Product")
+                }
             }
         }
     }

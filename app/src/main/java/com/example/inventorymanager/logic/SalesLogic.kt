@@ -16,7 +16,7 @@ object SalesManager {
     }
 
     fun calculateReconciliation(
-        updateMap: Map<Int, Int>,
+        updateMap: Map<String, Int>,
         currentItems: List<InventoryItem>
     ): ReconciliationResult {
         var totalNewRevenue = 0.0

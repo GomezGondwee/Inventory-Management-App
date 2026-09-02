@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,6 +22,7 @@ import java.util.Locale
 @Composable
 fun ReportsScreen(
     items: List<InventoryItem>,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val totalSold = items.sumOf { it.totalSold }
@@ -30,6 +33,14 @@ fun ReportsScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Sales Performance") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -54,7 +65,7 @@ fun ReportsScreen(
                 )
                 ReportSummaryCard(
                     title = "Total Revenue",
-                    value = "$${String.format(Locale.getDefault(), "%,.0f", totalRevenue)}",
+                    value = "MK${String.format(Locale.getDefault(), "%,.0f", totalRevenue)}",
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -162,15 +173,4 @@ fun ProductReportItem(
     }
 }
 
-@Preview(showBackground = true)
-@Composable
-fun ReportsScreenPreview() {
-    val sampleItems = listOf(
-        InventoryItem(1, "Coke", 20, 500.0, category = "Plastics", totalSold = 50),
-        InventoryItem(2, "Fanta", 15, 500.0, category = "Plastics", totalSold = 30),
-        InventoryItem(3, "Water", 50, 200.0, category = "Plastics", totalSold = 20)
-    )
-    MaterialTheme {
-        ReportsScreen(items = sampleItems)
-    }
-}
+
