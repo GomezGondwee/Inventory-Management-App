@@ -12,15 +12,23 @@ import androidx.compose.material.icons.outlined.AddCircle
 import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.DrawerValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -36,6 +44,7 @@ import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.ui.graphics.Color
 import com.example.inventorymanager.data.InventoryItem
+import com.example.inventorymanager.data.ReconciliationRecord
 
 sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
     object Home : Screen("home", "Home", Icons.Outlined.Home)
@@ -44,24 +53,33 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object Inventory : Screen("inventory", "Inventory", Icons.Outlined.Inventory2)
     object Reports : Screen("reports", "Reports", Icons.Outlined.Assessment)
     object Delivery : Screen("delivery", "Delivery", Icons.Outlined.LocalShipping)
+    object History : Screen("history", "History", Icons.Outlined.Assessment)
 }
 
 @Composable
 fun MainNavigationContainer(
     emptiesCount: Int,
     stockCount: Int,
-    salesCount: Int,
+    salesCount: Double,
+    stockNetValue: Double,
+    commission: Double,
     items: List<InventoryItem>,
+    history: List<ReconciliationRecord>,
     onSaveProduct: (InventoryItem) -> Unit,
     onDeleteProduct: (String) -> Unit,
     onReconcile: (Map<String, Int>, Double, Int) -> Unit,
     onReceiveDelivery: (Map<String, Int>) -> Unit,
+    onUpdateEmpties: (Int) -> Unit,
+    onDeleteHistory: (String) -> Unit,
     onSignOut: () -> Unit,
+    snackbarHostState: SnackbarHostState,
     lastUpdated: String = "Just now"
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Home.route
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
 
     val screens = listOf(
         Screen.Home,
@@ -71,81 +89,110 @@ fun MainNavigationContainer(
         Screen.Reports
     )
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar(containerColor = Color.Transparent) {
-                screens.forEach { screen ->
-                    val isSelected = currentRoute == screen.route
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = {
-                            println("Navigating to: ${screen.route}")
-                            if (currentRoute != screen.route) {
-                                navController.navigate(screen.route) {
-                                    popUpTo(navController.graph.startDestinationId) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        },
-                        icon = { Icon(screen.icon, contentDescription = screen.label) },
-                        label = {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = screen.label,
-                                    style = if (isSelected) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelMedium
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .padding(top = 2.dp)
-                                        .width(35.dp)
-                                        .height(3.dp)
-                                        .background(
-                                            if (isSelected) Color(0xFFD32F2F) else Color.Transparent
-                                        )
-                                )
-                            }
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Color(0xFFD32F2F),
-                            selectedTextColor = Color(0xFFD32F2F),
-                            indicatorColor = Color.Transparent,
-                            unselectedIconColor = Color.Gray,
-                            unselectedTextColor = Color.Gray,
-
-                        )
-                    )
-                }
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                SettingsScreenContent(
+                    onSignOut = {
+                        scope.launch { drawerState.close() }
+                        onSignOut()
+                    }
+                )
             }
         }
-    ) { innerPadding ->
-        AppNavHost(
-            navController = navController,
-            modifier = Modifier.padding(innerPadding),
-            emptiesCount = emptiesCount,
-            stockCount = stockCount,
-            salesCount = salesCount,
-            items = items,
-            onSaveProduct = onSaveProduct,
-            onDeleteProduct = onDeleteProduct,
-            onReconcile = onReconcile,
-            onReceiveDelivery = onReceiveDelivery,
-            onSignOut = onSignOut,
-            onNavigateToInventory = {
-                navController.navigate(Screen.Inventory.route) {
-                    popUpTo(Screen.Home.route)
+    ) {
+        Scaffold(
+            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            bottomBar = {
+                NavigationBar(containerColor = Color.Transparent) {
+                    screens.forEach { screen ->
+                        val isSelected = currentRoute == screen.route
+                        NavigationBarItem(
+                            selected = isSelected,
+                            onClick = {
+                                if (currentRoute != screen.route) {
+                                    navController.navigate(screen.route) {
+                                        popUpTo(navController.graph.startDestinationId) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            },
+                            icon = { Icon(screen.icon, contentDescription = screen.label) },
+                            label = {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = screen.label,
+                                        style = if (isSelected) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelMedium
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(top = 2.dp)
+                                            .width(35.dp)
+                                            .height(3.dp)
+                                            .background(
+                                                if (isSelected) Color(0xFFD32F2F) else Color.Transparent
+                                            )
+                                    )
+                                }
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = Color(0xFFD32F2F),
+                                selectedTextColor = Color(0xFFD32F2F),
+                                indicatorColor = Color.Transparent,
+                                unselectedIconColor = Color.Gray,
+                                unselectedTextColor = Color.Gray,
+                            )
+                        )
+                    }
                 }
-            },
-            onNavigateToDelivery = {
-                navController.navigate(Screen.Delivery.route)
-            },
-            onNavigateBack = {
-                navController.popBackStack()
-            },
-            lastUpdated = lastUpdated
-        )
+            }
+        ) { innerPadding ->
+            AppNavHost(
+                navController = navController,
+                modifier = Modifier.padding(innerPadding),
+                emptiesCount = emptiesCount,
+                stockCount = stockCount,
+                salesCount = salesCount,
+                stockNetValue = stockNetValue,
+                commission = commission,
+                items = items,
+                onSaveProduct = onSaveProduct,
+                onDeleteProduct = onDeleteProduct,
+                onReconcile = onReconcile,
+                onReceiveDelivery = onReceiveDelivery,
+                onSignOut = onSignOut,
+                onNavigateToInventory = {
+                    navController.navigate(Screen.Inventory.route) {
+                        popUpTo(Screen.Home.route)
+                    }
+                },
+                onNavigateToDelivery = {
+                    navController.navigate(Screen.Delivery.route)
+                },
+                onNavigateToHistory = {
+                    navController.navigate(Screen.History.route)
+                },
+                onNavigateToHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                    }
+                },
+                onUpdateEmpties = onUpdateEmpties,
+                onDeleteHistory = onDeleteHistory,
+                onSettingsClick = {
+                    scope.launch { drawerState.open() }
+                },
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                history = history,
+                lastUpdated = lastUpdated
+            )
+        }
     }
 }
 
@@ -155,8 +202,11 @@ fun AppNavHost(
     modifier: Modifier = Modifier,
     emptiesCount: Int,
     stockCount: Int,
-    salesCount: Int,
+    salesCount: Double,
+    stockNetValue: Double,
+    commission: Double,
     items: List<InventoryItem>,
+    history: List<ReconciliationRecord>,
     onSaveProduct: (InventoryItem) -> Unit,
     onDeleteProduct: (String) -> Unit,
     onReconcile: (Map<String, Int>, Double, Int) -> Unit,
@@ -164,6 +214,11 @@ fun AppNavHost(
     onSignOut: () -> Unit,
     onNavigateToInventory: () -> Unit,
     onNavigateToDelivery: () -> Unit,
+    onNavigateToHistory: () -> Unit,
+    onNavigateToHome: () -> Unit,
+    onUpdateEmpties: (Int) -> Unit,
+    onDeleteHistory: (String) -> Unit,
+    onSettingsClick: () -> Unit,
     onNavigateBack: () -> Unit,
     lastUpdated: String
 ) {
@@ -179,10 +234,15 @@ fun AppNavHost(
                 emptiesCount = emptiesCount,
                 salesCount = salesCount,
                 stockCount = stockCount,
+                stockNetValue = stockNetValue,
+                commission = commission,
                 lastUpdated = lastUpdated,
                 onReceiveDeliveryClick = onNavigateToDelivery,
+                onViewHistoryClick = onNavigateToHistory,
+                onSettingsClick = onSettingsClick,
+                onUpdateEmpties = onUpdateEmpties,
                 onSignOut = onSignOut,
-                modifier = Modifier // Padding is handled by the NavHost modifier
+                modifier = Modifier
             )
         }
         composable(Screen.Sales.route) {
@@ -190,7 +250,7 @@ fun AppNavHost(
                 items = items,
                 onConfirmReconciliation = { results, revenue, empties ->
                     onReconcile(results, revenue, empties)
-                    onNavigateToInventory()
+                    onNavigateToHome()
                 },
                 onBack = onNavigateBack
             )
@@ -207,7 +267,7 @@ fun AppNavHost(
                     itemToEdit = null
                     onNavigateBack()
                 },
-                modifier = Modifier // Padding is handled by the NavHost modifier
+                modifier = Modifier
             )
         }
         composable(Screen.Inventory.route) {
@@ -229,6 +289,13 @@ fun AppNavHost(
         composable(Screen.Reports.route) {
             ReportsScreen(
                 items = items,
+                onBack = onNavigateBack
+            )
+        }
+        composable(Screen.History.route) {
+            HistoryScreen(
+                history = history,
+                onDeleteHistory = onDeleteHistory,
                 onBack = onNavigateBack
             )
         }
@@ -256,13 +323,19 @@ fun MainNavigationPreview() {
         MainNavigationContainer(
             emptiesCount = 40,
             stockCount = 400,
-            salesCount = 1000000,
+            salesCount = 1000000.0,
+            stockNetValue = 5000000.0,
+            commission = 67000.0,
             items = sampleItems,
+            history = emptyList(),
             onSaveProduct = {},
             onDeleteProduct = {},
             onReconcile = { _, _, _ -> },
             onReceiveDelivery = {},
-            onSignOut = {}
+            onUpdateEmpties = {},
+            onDeleteHistory = {},
+            onSignOut = {},
+            snackbarHostState = androidx.compose.material3.SnackbarHostState()
         )
     }
 }

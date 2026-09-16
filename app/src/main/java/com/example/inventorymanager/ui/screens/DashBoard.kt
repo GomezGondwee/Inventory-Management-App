@@ -1,77 +1,53 @@
 package com.example.inventorymanager.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.anchoredDraggable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Payments
-import androidx.compose.material.icons.rounded.List
-import androidx.compose.material.icons.rounded.Inventory
-import androidx.compose.material.icons.outlined.LocalShipping
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material.icons.automirrored.outlined.Logout
-import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.Inventory
+import androidx.compose.material.icons.rounded.List
+import androidx.compose.material.icons.rounded.Payments
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.draw.clip
 import coil.compose.AsyncImage
+import com.example.inventorymanager.ui.utils.liveRegionPolite
 import com.google.firebase.auth.FirebaseAuth
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material3.Button
-import androidx.compose.material.icons.outlined.Logout
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashBoardScreen(
     emptiesCount: Int,
-    salesCount: Int,
+    salesCount: Double,
     stockCount: Int,
-    lastUpdated: String = "Just now",
+    stockNetValue: Double = 0.0,
+    commission: Double = 0.0,
+    lastUpdated: String = "Never",
     onReceiveDeliveryClick: () -> Unit,
+    onViewHistoryClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onUpdateEmpties: (Int) -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier
 ) {
     var showProfileSheet by remember { mutableStateOf(false) }
+    var showEditEmptiesDialog by remember { mutableStateOf(false) }
     val user = FirebaseAuth.getInstance().currentUser
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
@@ -94,7 +70,7 @@ fun DashBoardScreen(
                                 model = user.photoUrl,
                                 contentDescription = "Profile",
                                 modifier = Modifier.fillMaxSize(),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                contentScale = ContentScale.Crop
                             )
                         } else {
                             Icon(
@@ -113,7 +89,7 @@ fun DashBoardScreen(
                             color = MaterialTheme.colorScheme.outline
                         )
                         Text(
-                            text = "Gomezgani Gondwe",
+                            text = user?.displayName ?: "User",
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -127,7 +103,7 @@ fun DashBoardScreen(
                             tint = Color.Black
                         )
                     }
-                    IconButton(onClick = {  }) {
+                    IconButton(onClick = onSettingsClick) {
                         Icon(
                             imageVector = Icons.Outlined.Settings,
                             contentDescription = "Settings",
@@ -152,18 +128,53 @@ fun DashBoardScreen(
                 Spacer(modifier = Modifier.padding(top = 8.dp))
             }
             item {
-                DeliveryActionCard(onClick = onReceiveDeliveryClick)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    DeliveryActionCard(
+                        onClick = onReceiveDeliveryClick,
+                        modifier = Modifier.weight(1f)
+                    )
+                    HistoryActionCard(
+                        onClick = onViewHistoryClick,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
             item {
-                EmptiesCard(quantity = emptiesCount, lastUpdated = lastUpdated)
+                EmptiesCard(
+                    quantity = emptiesCount,
+                    lastUpdated = lastUpdated,
+                    onClick = { showEditEmptiesDialog = true }
+                )
             }
             item {
-                StockCard(quantity = stockCount, lastUpdated = lastUpdated)
+                StockCard(
+                    quantity = stockCount,
+                    netValue = stockNetValue,
+                    lastUpdated = lastUpdated
+                )
             }
             item {
-                SalesCard(amount = salesCount, lastUpdated = lastUpdated)
+                SalesCard(
+                    amount = salesCount,
+                    commission = commission,
+                    lastUpdated = lastUpdated
+                )
             }
         }
+    }
+
+    if (showEditEmptiesDialog) {
+        EditEmptiesDialog(
+            currentCount = emptiesCount,
+            onDismiss = { showEditEmptiesDialog = false },
+            onConfirm = {
+                onUpdateEmpties(it)
+                showEditEmptiesDialog = false
+            }
+        )
     }
 
     if (showProfileSheet) {
@@ -189,7 +200,7 @@ fun DashBoardScreen(
                             model = user.photoUrl,
                             contentDescription = "Profile",
                             modifier = Modifier.fillMaxSize(),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            contentScale = ContentScale.Crop
                         )
                     } else {
                         Icon(
@@ -244,9 +255,9 @@ fun DashBoardScreen(
 }
 
 @Composable
-fun DeliveryActionCard(onClick: () -> Unit) {
+fun DeliveryActionCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         onClick = onClick,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
@@ -265,14 +276,9 @@ fun DeliveryActionCard(onClick: () -> Unit) {
             Column {
                 Text(
                     text = "Receive Delivery",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                     fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Update stock from truck",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                 )
             }
         }
@@ -280,36 +286,60 @@ fun DeliveryActionCard(onClick: () -> Unit) {
 }
 
 @Composable
-fun EmptiesCard(quantity: Int, lastUpdated: String) {
+fun EmptiesCard(quantity: Int, lastUpdated: String, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(8.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White
-            ),
+        onClick = onClick,
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.Inventory,
+                        contentDescription = null,
+                        tint = Color(0xFFD32F2F),
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFFFCDD2))
+                            .padding(5.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "Empties", style = MaterialTheme.typography.titleMedium)
+                }
                 Icon(
-                    imageVector = Icons.Rounded.Inventory,
-                    contentDescription = null,
-                    tint = Color(0xFFD32F2F),
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFFFFCDD2))
-                        .padding(5.dp)
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Edit",
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.outline
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "Empties", style = MaterialTheme.typography.titleMedium)
             }
             Text(
                 text = " $quantity",
                 style = MaterialTheme.typography.displaySmall,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .liveRegionPolite(),
                 color = Color(0xFFD32F2F)
+            )
+
+            val netValue = quantity * 4000.0
+            val formattedValue = java.text.DecimalFormat("#,###.##").format(netValue)
+            Text(
+                text = "Net Value: MK$formattedValue",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.padding(start = 4.dp)
             )
             
             HorizontalDivider(
@@ -328,7 +358,8 @@ fun EmptiesCard(quantity: Int, lastUpdated: String) {
 }
 
 @Composable
-fun StockCard(quantity: Int, lastUpdated: String) {
+fun StockCard(quantity: Int, netValue: Double, lastUpdated: String) {
+    val formattedValue = java.text.DecimalFormat("#,###.##").format(netValue)
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -357,8 +388,17 @@ fun StockCard(quantity: Int, lastUpdated: String) {
             Text(
                 text = " $quantity",
                 style = MaterialTheme.typography.displaySmall,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .liveRegionPolite(),
                 color = Color(0xFFD32F2F)
+            )
+
+            Text(
+                text = "Net Value: MK$formattedValue",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.padding(start = 4.dp)
             )
 
             HorizontalDivider(
@@ -377,7 +417,9 @@ fun StockCard(quantity: Int, lastUpdated: String) {
 }
 
 @Composable
-fun SalesCard(amount: Int, lastUpdated: String) {
+fun SalesCard(amount: Double, commission: Double, lastUpdated: String) {
+    val formattedAmount = java.text.DecimalFormat("#,###.##").format(amount)
+    val formattedCommission = java.text.DecimalFormat("#,###.##").format(commission)
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -403,10 +445,19 @@ fun SalesCard(amount: Int, lastUpdated: String) {
                 Text(text = "Total Sales", style = MaterialTheme.typography.titleMedium)
             }
             Text(
-                text = " MK$amount",
+                text = " MK$formattedAmount",
                 style = MaterialTheme.typography.displaySmall,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .liveRegionPolite(),
                 color = Color(0xFFD32F2F)
+            )
+
+            Text(
+                text = "Daily Commission: MK$formattedCommission",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.padding(start = 4.dp)
             )
 
             HorizontalDivider(
@@ -424,16 +475,98 @@ fun SalesCard(amount: Int, lastUpdated: String) {
     }
 }
 
-@Preview(showBackground = true)
+@Composable
+fun HistoryActionCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        onClick = onClick,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.History,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(
+                    text = "History",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Daily logs",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun EditEmptiesDialog(
+    currentCount: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    var textValue by remember { mutableStateOf(currentCount.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Empties Count") },
+        text = {
+            Column {
+                Text(
+                    "Manually adjust the total count of empties.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                OutlinedTextField(
+                    value = textValue,
+                    onValueChange = { if (it.all { char -> char.isDigit() }) textValue = it },
+                    label = { Text("Total Empties") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(textValue.toIntOrNull() ?: 0) }) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
 @Composable
 fun DashBoardPreview() {
     MaterialTheme {
         DashBoardScreen(
             emptiesCount = 450,
-            salesCount = 1000000,
+            salesCount = 1000000.0,
             stockCount = 763,
+            stockNetValue = 5000000.0,
+            commission = 67000.0,
             lastUpdated = "10:30 PM",
             onReceiveDeliveryClick = {},
+            onViewHistoryClick = {},
+            onSettingsClick = {},
+            onUpdateEmpties = {},
             onSignOut = {},
             modifier = Modifier.padding(2.dp)
         )

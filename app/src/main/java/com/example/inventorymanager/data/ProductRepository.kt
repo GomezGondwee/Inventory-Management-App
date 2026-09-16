@@ -2,6 +2,7 @@ package com.example.inventorymanager.data
 
 import android.net.Uri
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -53,7 +54,7 @@ class ProductRepository {
                 return@addSnapshotListener
             }
             if (snapshot != null) {
-                trySend(snapshot.toObject(DashboardStats::class.java))
+                trySend(snapshot.toObject(DashboardStats::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE))
             }
         }
         awaitClose { listener.remove() }
@@ -87,7 +88,13 @@ class ProductRepository {
         }
     }
 
-    suspend fun saveReconciliation(totalRevenue: Double, totalEmpties: Int, updatedItems: List<InventoryItem>): Result<Unit> {
+    suspend fun saveReconciliation(
+        totalRevenue: Double,
+        totalEmpties: Int,
+        updatedItems: List<InventoryItem>,
+        soldItems: List<SoldItem>,
+        commission: Double
+    ): Result<Unit> {
         val userId = auth.currentUser?.uid
             ?: return Result.failure(Exception("User not authenticated"))
 
@@ -96,9 +103,21 @@ class ProductRepository {
             
             val historyRef = firestore.collection("users").document(userId)
                 .collection("reconciliations").document()
-            val historyData = ReconciliationRecord(
-                totalRevenue = totalRevenue,
-                totalEmpties = totalEmpties
+            val historyData = hashMapOf(
+                "id" to historyRef.id,
+                "totalRevenue" to totalRevenue,
+                "totalEmpties" to totalEmpties,
+                "commission" to commission,
+                "soldItems" to soldItems.map { 
+                    hashMapOf(
+                        "productId" to it.productId,
+                        "productName" to it.productName,
+                        "quantitySold" to it.quantitySold,
+                        "unitPrice" to it.unitPrice,
+                        "category" to it.category
+                    )
+                },
+                "timestamp" to FieldValue.serverTimestamp()
             )
             batch.set(historyRef, historyData)
             
@@ -106,7 +125,8 @@ class ProductRepository {
                 .collection("stats").document("dashboard")
             val statsUpdates = hashMapOf(
                 "totalRevenue" to FieldValue.increment(totalRevenue),
-                "totalEmpties" to FieldValue.increment(totalEmpties.toLong())
+                "totalEmpties" to FieldValue.increment(totalEmpties.toLong()),
+                "lastUpdated" to FieldValue.serverTimestamp()
             )
             batch.set(statsRef, statsUpdates, SetOptions.merge())
             
@@ -158,5 +178,62 @@ class ProductRepository {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun updateEmpties(newTotal: Int): Result<Unit> {
+        val userId = auth.currentUser?.uid
+            ?: return Result.failure(Exception("User not authenticated"))
+
+        return try {
+            val statsRef = firestore.collection("users").document(userId)
+                .collection("stats").document("dashboard")
+            
+            val updates = hashMapOf(
+                "totalEmpties" to newTotal,
+                "lastUpdated" to FieldValue.serverTimestamp()
+            )
+            statsRef.update(updates).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteReconciliation(reconciliationId: String): Result<Unit> {
+        val userId = auth.currentUser?.uid
+            ?: return Result.failure(Exception("User not authenticated"))
+
+        return try {
+            firestore.collection("users").document(userId)
+                .collection("reconciliations").document(reconciliationId)
+                .delete().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun getReconciliationHistory(): Flow<List<ReconciliationRecord>> = callbackFlow {
+        val userId = auth.currentUser?.uid
+        if (userId == null) {
+            trySend(emptyList())
+            awaitClose { }
+            return@callbackFlow
+        }
+
+        val query = firestore.collection("users").document(userId)
+            .collection("reconciliations")
+            .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+
+        val listener = query.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                close(error)
+                return@addSnapshotListener
+            }
+            if (snapshot != null) {
+                trySend(snapshot.toObjects(ReconciliationRecord::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE))
+            }
+        }
+        awaitClose { listener.remove() }
     }
 }

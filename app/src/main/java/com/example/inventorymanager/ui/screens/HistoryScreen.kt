@@ -10,16 +10,19 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.inventorymanager.data.ReconciliationRecord
 import com.example.inventorymanager.data.SoldItem
+import com.example.inventorymanager.ui.utils.CsvExportHelper
 import com.example.inventorymanager.ui.utils.TimeUtils
 import java.util.Locale
 
@@ -32,6 +35,7 @@ fun HistoryScreen(
     modifier: Modifier = Modifier
 ) {
     var reconciliationToDelete by remember { mutableStateOf<ReconciliationRecord?>(null) }
+    val context = LocalContext.current
 
     Scaffold(
         modifier = modifier,
@@ -41,6 +45,16 @@ fun HistoryScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    if (history.isNotEmpty()) {
+                        IconButton(onClick = {
+                            val csvContent = CsvExportHelper.generateHistoryCsv(history)
+                            CsvExportHelper.shareCsvFile(context, csvContent)
+                        }) {
+                            Icon(Icons.Default.FileDownload, contentDescription = "Export CSV")
+                        }
                     }
                 }
             )
@@ -192,7 +206,7 @@ fun HistoryRecordCard(
 
                     if (record.commission > 0) {
                         Text(
-                            text = "Commission (0.067%): MK${String.format(Locale.getDefault(), "%,.2f", record.commission)}",
+                            text = "Commission (6.7%): MK${String.format(Locale.getDefault(), "%,.2f", record.commission)}",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF4CAF50),

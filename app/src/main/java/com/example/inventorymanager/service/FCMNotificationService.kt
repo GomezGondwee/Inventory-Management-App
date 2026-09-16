@@ -19,6 +19,8 @@ class FCMNotificationService : FirebaseMessagingService() {
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
         
+        Log.d("FCM", "Message received but FCM processing is currently disabled.")
+        /*
         Log.d("FCM", "From: ${remoteMessage.from}")
 
         InAppNotificationManager.triggerNotification(
@@ -30,6 +32,7 @@ class FCMNotificationService : FirebaseMessagingService() {
             remoteMessage.notification?.title ?: "Stock Alert",
             remoteMessage.notification?.body ?: "Product update received"
         )
+        */
     }
 
     override fun onNewToken(token: String) {

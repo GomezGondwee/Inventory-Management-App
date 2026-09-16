@@ -5,17 +5,12 @@ import com.google.firebase.Timestamp
 import java.util.Calendar
 
 object TimeUtils {
-    /**
-     * Converts a Firebase Timestamp to a relative localized time string (e.g., "2 minutes ago").
-     * If the timestamp is null, returns "Never".
-     */
+
     fun getRelativeTime(timestamp: Timestamp?): String {
         if (timestamp == null) return "Never"
         
         val now = System.currentTimeMillis()
         val time = timestamp.toDate().time
-        
-        // If the time is in the future (due to device clock skew), return "Just now"
         if (time > now) return "Just now"
         
         return DateUtils.getRelativeTimeSpanString(
