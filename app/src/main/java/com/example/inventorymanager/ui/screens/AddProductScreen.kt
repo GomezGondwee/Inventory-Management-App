@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -29,6 +30,8 @@ import androidx.compose.material.icons.filled.Liquor
 import androidx.compose.material.icons.filled.WineBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,6 +51,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,12 +60,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.inventorymanager.data.InventoryItem
 import com.example.inventorymanager.ui.utils.ImageUtils
+import kotlinx.coroutines.launch
 
 @Composable
 fun CircleIcon(
@@ -90,7 +96,7 @@ fun CircleIcon(
 @Composable
 fun AddProductScreen(
     initialItem: InventoryItem? = null,
-    onSave: (InventoryItem) -> Unit,
+    onSave: suspend (InventoryItem) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -104,6 +110,7 @@ fun AddProductScreen(
 
     var nameError by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val context = LocalContext.current
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -118,160 +125,165 @@ fun AddProductScreen(
         }
     )
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(if (initialItem == null) "Add New Product" else "Edit Product") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            OutlinedTextField(
-                value = name,
-                onValueChange = {
-                    name = it
-                    nameError = it.isBlank()
-                },
-                label = { Text("Product Name") },
-                leadingIcon = {
-                    Box(modifier = Modifier.padding(start = 8.dp)) {
-                        CircleIcon(Icons.Default.Label)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                isError = nameError,
-                supportingText = {
-                    if (nameError) {
-                        Text("Name cannot be empty", color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            )
-
-            OutlinedTextField(
-                value = quantity,
-                onValueChange = { quantity = it },
-                label = { Text("Quantity") },
-                leadingIcon = {
-                    Box(modifier = Modifier.padding(start = 8.dp)) {
-                        CircleIcon(Icons.Default.Inventory2)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-            )
-
-            OutlinedTextField(
-                value = price,
-                onValueChange = { price = it },
-                label = { Text("Price (MK)") },
-                leadingIcon = {
-                    Box(modifier = Modifier.padding(start = 8.dp)) {
-                        CircleIcon(Icons.Default.AttachMoney)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-            )
-
-            ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = { expanded = !expanded },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                val categoryIcon = if (selectedCategory == "Glass") Icons.Default.WineBar else Icons.Default.Liquor
-                OutlinedTextField(
-                    value = selectedCategory,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Category") },
-                    leadingIcon = {
-                        Box(modifier = Modifier.padding(start = 8.dp)) {
-                            CircleIcon(categoryIcon)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text(if (initialItem == null) "Add New Product" else "Edit Product") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack, enabled = !isSaving) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                    modifier = Modifier
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth()
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface
+                    )
                 )
-                ExposedDropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false }
+            }
+        ) { innerPadding ->
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = {
+                        name = it
+                        nameError = it.isBlank()
+                    },
+                    label = { Text("Product Name") },
+                    leadingIcon = {
+                        Box(modifier = Modifier.padding(start = 8.dp)) {
+                            CircleIcon(Icons.Default.Label)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSaving,
+                    isError = nameError,
+                    supportingText = {
+                        if (nameError) {
+                            Text("Name cannot be empty", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                )
+
+                OutlinedTextField(
+                    value = quantity,
+                    onValueChange = { quantity = it },
+                    label = { Text("Quantity") },
+                    leadingIcon = {
+                        Box(modifier = Modifier.padding(start = 8.dp)) {
+                            CircleIcon(Icons.Default.Inventory2)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSaving,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+
+                OutlinedTextField(
+                    value = price,
+                    onValueChange = { price = it },
+                    label = { Text("Price (MK)") },
+                    leadingIcon = {
+                        Box(modifier = Modifier.padding(start = 8.dp)) {
+                            CircleIcon(Icons.Default.AttachMoney)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSaving,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
+
+                ExposedDropdownMenuBox(
+                    expanded = expanded && !isSaving,
+                    onExpandedChange = { if (!isSaving) expanded = !expanded },
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    categories.forEach { selectionOption ->
-                        val icon = if (selectionOption == "Glass") Icons.Default.WineBar else Icons.Default.Liquor
-                        DropdownMenuItem(
-                            text = { Text(selectionOption) },
-                            leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                            onClick = {
-                                selectedCategory = selectionOption
-                                expanded = false
-                            },
-                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
-                        )
+                    val categoryIcon = if (selectedCategory == "Glass") Icons.Default.WineBar else Icons.Default.Liquor
+                    OutlinedTextField(
+                        value = selectedCategory,
+                        onValueChange = {},
+                        readOnly = true,
+                        enabled = !isSaving,
+                        label = { Text("Category") },
+                        leadingIcon = {
+                            Box(modifier = Modifier.padding(start = 8.dp)) {
+                                CircleIcon(categoryIcon)
+                            }
+                        },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                        colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                        modifier = Modifier
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = expanded && !isSaving,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        categories.forEach { selectionOption ->
+                            val icon = if (selectionOption == "Glass") Icons.Default.WineBar else Icons.Default.Liquor
+                            DropdownMenuItem(
+                                text = { Text(selectionOption) },
+                                leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                onClick = {
+                                    selectedCategory = selectionOption
+                                    expanded = false
+                                },
+                                contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                            )
+                        }
                     }
                 }
-            }
 
-            // Image Selection UI
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                if (selectedImageUri != null) {
-                    AsyncImage(
-                        model = selectedImageUri,
-                        contentDescription = "Selected Image",
-                        modifier = Modifier
-                            .size(120.dp)
-                            .clip(RoundedCornerShape(4.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        photoPickerLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    shape = RoundedCornerShape(4.dp)
+                // Image Selection UI
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    CircleIcon(imageVector = Icons.Default.AddAPhoto)
-                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                    Text(if (selectedImageUri == null) "Select Image" else "Change Image")
+                    if (selectedImageUri != null) {
+                        AsyncImage(
+                            model = selectedImageUri,
+                            contentDescription = "Selected Image",
+                            modifier = Modifier
+                                .size(120.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        enabled = !isSaving,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        CircleIcon(imageVector = Icons.Default.AddAPhoto)
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                        Text(if (selectedImageUri == null) "Select Image" else "Change Image")
+                    }
                 }
-            }
 
-            Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.weight(1f))
 
-            Button(
-                onClick = {
-                    if (name.isNotBlank()) {
-                        isSaving = true
-                        val q = quantity.toIntOrNull() ?: 0
-                        val p = price.toDoubleOrNull() ?: 0.0
-                        onSave(
-                            InventoryItem(
+                Button(
+                    onClick = {
+                        if (name.isNotBlank()) {
+                            isSaving = true
+                            val q = quantity.toIntOrNull() ?: 0
+                            val p = price.toDoubleOrNull() ?: 0.0
+                            val itemToSave = InventoryItem(
                                 id = initialItem?.id ?: "",
                                 name = name,
                                 quantity = q,
@@ -280,27 +292,65 @@ fun AddProductScreen(
                                 imageUri = selectedImageUri?.toString(),
                                 totalSold = initialItem?.totalSold ?: 0
                             )
-                        )
-                    } else {
-                        nameError = true
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isSaving,
-                shape = RoundedCornerShape(4.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFD32F2F),
-                    contentColor = Color.White
-                )
-            ) {
-                if (isSaving) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = Color.White,
-                        strokeWidth = 2.dp
+                            scope.launch {
+                                try {
+                                    onSave(itemToSave)
+                                } finally {
+                                    isSaving = false
+                                }
+                            }
+                        } else {
+                            nameError = true
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSaving,
+                    shape = RoundedCornerShape(4.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFD32F2F),
+                        contentColor = Color.White
                     )
-                } else {
+                ) {
                     Text(if (initialItem == null) "Save Product" else "Update Product")
+                }
+            }
+        }
+
+        if (isSaving) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(44.dp),
+                            color = Color(0xFFD32F2F),
+                            strokeWidth = 3.5.dp
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = if (initialItem == null) "Saving Product..." else "Updating Product...",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Processing details, please wait",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
                 }
             }
         }

@@ -52,7 +52,6 @@ class MainActivity : ComponentActivity() {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
                 PackageManager.PERMISSION_GRANTED
             ) {
-                // Already granted
             } else {
                 requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
@@ -73,17 +72,12 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
 
-        /* FCM Disabled - Using In-Device Notifications instead
-        FirebaseMessaging.getInstance().subscribeToTopic("stock_alerts")
-            .addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    Log.d("FCM", "Subscribed to stock alerts!")
-                }
-            }
-        */
 
         setContent {
-            InventoryManagerTheme {
+            var isDarkMode by remember { mutableStateOf(false) }
+            var isStockAlertEnabled by remember { mutableStateOf(true) }
+
+            InventoryManagerTheme(darkTheme = isDarkMode) {
                 val repository = remember { ProductRepository() }
                 val scope = rememberCoroutineScope()
                 val snackbarHostState = remember { SnackbarHostState() }
@@ -92,30 +86,43 @@ class MainActivity : ComponentActivity() {
                 val items by repository.getProducts().collectAsState(initial = emptyList())
                 val stats by repository.getDashboardStats().collectAsState(initial = null)
                 val history by repository.getReconciliationHistory().collectAsState(initial = emptyList())
+                val notifications by InAppNotificationManager.notifications.collectAsState(initial = emptyList())
+                val unreadCount by InAppNotificationManager.unreadCount.collectAsState(initial = 0)
 
                 // Track which items have already triggered a notification in this session
                 val notifiedItems = remember { mutableStateMapOf<String, Int>() }
 
-                LaunchedEffect(items) {
-                    items.forEach { item ->
-                        val lastKnownQuantity = notifiedItems[item.id] ?: Int.MAX_VALUE
-                        
-                        // If it just dropped below 20
-                        if (item.quantity < 20 && lastKnownQuantity >= 20) {
-                            LocalNotificationHelper.showNotification(
-                                context = context,
-                                title = "Low Stock Alert! ⚠️",
-                                body = "\"${item.name}\" is running low. Only ${item.quantity} left!"
-                            )
+                LaunchedEffect(items, isStockAlertEnabled) {
+                    if (isStockAlertEnabled) {
+                        items.forEach { item ->
+                            val hasBeenTracked = notifiedItems.containsKey(item.id)
+                            val lastKnownQuantity = notifiedItems[item.id] ?: item.quantity
+
+                            // Trigger notification only if item was already tracked this session AND dropped below 20
+                            if (hasBeenTracked && item.quantity < 20 && lastKnownQuantity >= 20) {
+                                val title = "Low Stock Alert! ⚠️"
+                                val body = "\"${item.name}\" is running low. Only ${item.quantity} left!"
+
+                                LocalNotificationHelper.showNotification(
+                                    context = context,
+                                    title = title,
+                                    body = body
+                                )
+
+                                InAppNotificationManager.triggerNotification(
+                                    title = title,
+                                    body = body
+                                )
+                            }
+
+                            // Update tracking baseline
+                            notifiedItems[item.id] = item.quantity
                         }
-                        
-                        // Update tracking
-                        notifiedItems[item.id] = item.quantity
                     }
                 }
 
                 LaunchedEffect(Unit) {
-                    InAppNotificationManager.notifications.collectLatest { notification ->
+                    InAppNotificationManager.newNotificationFlow.collectLatest { notification ->
                         snackbarHostState.showSnackbar(
                             message = "${notification.title}: ${notification.body}",
                             actionLabel = "Dismiss"
@@ -128,7 +135,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(stats?.lastUpdated) {
                     while (true) {
                         lastUpdated = TimeUtils.getRelativeTime(stats?.lastUpdated)
-                        delay(60000) // Refresh every minute
+                        delay(60000) 
                     }
                 }
 
@@ -150,26 +157,30 @@ class MainActivity : ComponentActivity() {
                     commission = commission,
                     items = items,
                     history = history,
+                    notifications = notifications,
+                    unreadCount = unreadCount,
                     lastUpdated = lastUpdated,
                     snackbarHostState = snackbarHostState,
+                    isDarkMode = isDarkMode,
+                    isStockAlertEnabled = isStockAlertEnabled,
+                    onToggleDarkMode = { isDarkMode = it },
+                    onToggleStockAlert = { isStockAlertEnabled = it },
                     onSaveProduct = { newItem ->
-                        scope.launch {
-                            var finalItem = newItem
-                            
-                            newItem.imageUri?.let { uriString ->
-                                if (uriString.startsWith("file://")) {
-                                    val uploadResult = repository.uploadImage(uriString.removePrefix("file://"))
-                                    if (uploadResult.isSuccess) {
-                                        finalItem = newItem.copy(imageUri = uploadResult.getOrNull())
-                                    }
+                        var finalItem = newItem
+                        
+                        newItem.imageUri?.let { uriString ->
+                            if (uriString.startsWith("file://")) {
+                                val uploadResult = repository.uploadImage(uriString.removePrefix("file://"))
+                                if (uploadResult.isSuccess) {
+                                    finalItem = newItem.copy(imageUri = uploadResult.getOrNull())
                                 }
                             }
+                        }
 
-                            if (finalItem.id.isNotEmpty()) {
-                                repository.updateProduct(finalItem)
-                            } else {
-                                repository.addProduct(finalItem)
-                            }
+                        if (finalItem.id.isNotEmpty()) {
+                            repository.updateProduct(finalItem)
+                        } else {
+                            repository.addProduct(finalItem)
                         }
                     },
                     onDeleteProduct = { productId ->
@@ -182,15 +193,13 @@ class MainActivity : ComponentActivity() {
                             updateMap = updateMap,
                             currentItems = items
                         )
-                        scope.launch {
-                            repository.saveReconciliation(
-                                totalRevenue = revenue,
-                                totalEmpties = empties,
-                                updatedItems = result.updatedItems,
-                                soldItems = result.soldItems,
-                                commission = result.commission
-                            )
-                        }
+                        repository.saveReconciliation(
+                            totalRevenue = revenue,
+                            totalEmpties = empties,
+                            updatedItems = result.updatedItems,
+                            soldItems = result.soldItems,
+                            commission = result.commission
+                        )
                     },
                     onReceiveDelivery = { deliveryMap ->
                         scope.launch {
@@ -204,10 +213,17 @@ class MainActivity : ComponentActivity() {
                     },
                     onDeleteHistory = { reconciliationId ->
                         scope.launch {
-                            repository.deleteReconciliation(reconciliationId)
+                            val result = repository.deleteReconciliation(reconciliationId)
+                            if (result.isFailure) {
+                                snackbarHostState.showSnackbar("Failed to delete record: ${result.exceptionOrNull()?.localizedMessage}")
+                            }
                         }
                     },
+                    onClearNotifications = {
+                        InAppNotificationManager.clearUnreadCount()
+                    },
                     onSignOut = {
+                        InAppNotificationManager.reset()
                         FirebaseAuth.getInstance().signOut()
                         val intent = Intent(this, LoginActivity::class.java)
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)

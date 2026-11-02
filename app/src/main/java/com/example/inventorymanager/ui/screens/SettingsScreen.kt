@@ -20,12 +20,14 @@ import com.google.firebase.auth.FirebaseAuth
 
 @Composable
 fun SettingsScreenContent(
+    isDarkMode: Boolean,
+    isStockAlertEnabled: Boolean,
+    onToggleDarkMode: (Boolean) -> Unit,
+    onToggleStockAlert: (Boolean) -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val user = FirebaseAuth.getInstance().currentUser
-    var stockAlertsEnabled by remember { mutableStateOf(true) }
-    var darkModeEnabled by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -56,15 +58,15 @@ fun SettingsScreenContent(
         SettingsToggleItem(
             icon = Icons.Outlined.Notifications,
             title = "Stock Alerts",
-            checked = stockAlertsEnabled,
-            onCheckedChange = { stockAlertsEnabled = it }
+            checked = isStockAlertEnabled,
+            onCheckedChange = onToggleStockAlert
         )
         SettingsToggleItem(
             icon = Icons.Outlined.ColorLens,
             title = "Dark Mode",
             subtitle = "Enable dark theme",
-            checked = darkModeEnabled,
-            onCheckedChange = { darkModeEnabled = it }
+            checked = isDarkMode,
+            onCheckedChange = onToggleDarkMode
         )
 
         Spacer(modifier = Modifier.height(16.dp))

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -53,18 +54,24 @@ import androidx.compose.ui.unit.dp
 import com.example.inventorymanager.data.InventoryItem
 import com.example.inventorymanager.logic.SalesManager
 
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ReconciliationScreen(
     items: List<InventoryItem>,
-    // Option A: Updated lambda signature to return calculated totals
-    onConfirm: (remainingStock: Map<String, Int>, totalRevenue: Double, totalEmpties: Int) -> Unit,
+    onConfirm: suspend (remainingStock: Map<String, Int>, totalRevenue: Double, totalEmpties: Int) -> Result<Unit>,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
     val remainingStockInputs = remember { mutableStateMapOf<String, String>() }
     var showConfirmationDialog by remember { mutableStateOf(false) }
+    var isFinalizing by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     val groupedItems = items
         .filter { it.name.contains(searchQuery, ignoreCase = true) }
@@ -76,134 +83,204 @@ fun ReconciliationScreen(
         sold * item.price
     }
 
-    Scaffold(
-        modifier = modifier,
-        topBar = {
-            TopAppBar(
-                title = { Text("Inventory Reconciliation") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = modifier,
+            snackbarHost = { androidx.compose.material3.SnackbarHost(hostState = snackbarHostState) },
+            topBar = {
+                TopAppBar(
+                    title = { Text("Inventory Reconciliation") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack, enabled = !isFinalizing) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                )
+            },
+            bottomBar = {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Session Revenue:", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "MK${String.format(Locale.getDefault(), "%.2f", totalRevenue)}",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Button(
+                            onClick = {
+                                val allValid = items.all { item ->
+                                    val input = remainingStockInputs[item.id] ?: ""
+                                    SalesManager.validateStockInput(input, item.quantity)
+                                }
+                                if (allValid) showConfirmationDialog = true
+                            },
+                            enabled = !isFinalizing,
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Complete Reconciliation")
+                        }
                     }
                 }
-            )
-        },
-        bottomBar = {
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Session Revenue:", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "MK${String.format(Locale.getDefault(), "%.2f", totalRevenue)}",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
+            }
+        ) { innerPadding ->
+            Column(modifier = Modifier.padding(innerPadding)) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    placeholder = { Text("Filter products...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    singleLine = true,
+                    enabled = !isFinalizing,
+                    shape = RoundedCornerShape(8.dp)
+                )
+
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    groupedItems.forEach { (productName, variants) ->
+                        stickyHeader {
+                            Box(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(vertical = 4.dp)) {
+                                Text(productName, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        items(variants) { variant ->
+                            ReconciliationItemRow(
+                                item = variant,
+                                currentInput = remainingStockInputs[variant.id] ?: "",
+                                onInputChange = { remainingStockInputs[variant.id] = it }
+                            )
+                        }
                     }
+                }
+            }
+        }
+
+        if (showConfirmationDialog) {
+            val reconciliationResults = SalesManager.calculateReconciliation(
+                updateMap = items.associate { item ->
+                    val remaining = remainingStockInputs[item.id]?.toIntOrNull() ?: item.quantity
+                    item.id to remaining
+                },
+                currentItems = items
+            )
+
+            AlertDialog(
+                onDismissRequest = { if (!isFinalizing) showConfirmationDialog = false },
+                title = { Text("Reconciliation Summary") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Total Revenue: MK${String.format(Locale.getDefault(), "%.2f", reconciliationResults.addedRevenue)}")
+                        Text("Total Items Sold: ${reconciliationResults.itemsSold}")
+                        Text("New Empties Recorded: ${reconciliationResults.addedEmpties}")
+                        Text("Are you sure you want to finalize this session?", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                    }
+                },
+                confirmButton = {
                     Button(
                         onClick = {
-                            val allValid = items.all { item ->
-                                val input = remainingStockInputs[item.id] ?: ""
-                                SalesManager.validateStockInput(input, item.quantity)
+                            isFinalizing = true
+                            val stockMap = items.associate { item ->
+                                val remaining = remainingStockInputs[item.id]?.toIntOrNull() ?: item.quantity
+                                item.id to remaining
                             }
-                            if (allValid) showConfirmationDialog = true
+                            scope.launch {
+                                try {
+                                    val result = onConfirm(
+                                        stockMap,
+                                        reconciliationResults.addedRevenue,
+                                        reconciliationResults.addedEmpties
+                                    )
+                                    if (result.isFailure) {
+                                        val msg = result.exceptionOrNull()?.localizedMessage ?: "Reconciliation failed"
+                                        snackbarHostState.showSnackbar(msg)
+                                    }
+                                } catch (e: Exception) {
+                                    snackbarHostState.showSnackbar(e.localizedMessage ?: "Reconciliation failed")
+                                } finally {
+                                    showConfirmationDialog = false
+                                    isFinalizing = false
+                                }
+                            }
                         },
-                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                        shape = RoundedCornerShape(8.dp)
+                        enabled = !isFinalizing
                     ) {
-                        Text("Complete Reconciliation")
+                        if (isFinalizing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Finalizing...")
+                        } else {
+                            Text("Finalize")
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showConfirmationDialog = false },
+                        enabled = !isFinalizing
+                    ) {
+                        Text("Cancel")
                     }
                 }
-            }
-        }
-    ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding)) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text("Filter products...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                singleLine = true,
-                shape = RoundedCornerShape(8.dp)
             )
+        }
 
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+        if (isFinalizing) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f)),
+                contentAlignment = Alignment.Center
             ) {
-                groupedItems.forEach { (productName, variants) ->
-                    stickyHeader {
-                        Box(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(vertical = 4.dp)) {
-                            Text(productName, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    items(variants) { variant ->
-                        ReconciliationItemRow(
-                            item = variant,
-                            currentInput = remainingStockInputs[variant.id] ?: "",
-                            onInputChange = { remainingStockInputs[variant.id] = it }
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(44.dp),
+                            color = Color(0xFFD32F2F),
+                            strokeWidth = 3.5.dp
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Finalizing Reconciliation...",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Updating stock records, please wait",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
                         )
                     }
                 }
             }
         }
-    }
-
-    if (showConfirmationDialog) {
-        val reconciliationResults = SalesManager.calculateReconciliation(
-            updateMap = items.associate { item ->
-                val remaining = remainingStockInputs[item.id]?.toIntOrNull() ?: item.quantity
-                item.id to remaining
-            },
-            currentItems = items
-        )
-
-        AlertDialog(
-            onDismissRequest = { showConfirmationDialog = false },
-            title = { Text("Reconciliation Summary") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Total Revenue: MK${String.format(Locale.getDefault(), "%.2f", reconciliationResults.addedRevenue)}")
-                    Text("Total Items Sold: ${reconciliationResults.itemsSold}")
-                    Text("New Empties Recorded: ${reconciliationResults.addedEmpties}")
-                    Text("Are you sure you want to finalize this session?", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val stockMap = items.associate { item ->
-                            val remaining = remainingStockInputs[item.id]?.toIntOrNull() ?: item.quantity
-                            item.id to remaining
-                        }
-                        // Triggers the updated callback with calculated totals
-                        onConfirm(
-                            stockMap,
-                            reconciliationResults.addedRevenue,
-                            reconciliationResults.addedEmpties
-                        )
-                        showConfirmationDialog = false
-                    }
-                ) {
-                    Text("Finalize")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showConfirmationDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
     }
 }
 

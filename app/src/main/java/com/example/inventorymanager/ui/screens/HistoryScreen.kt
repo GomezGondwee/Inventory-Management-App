@@ -1,5 +1,7 @@
 package com.example.inventorymanager.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -22,8 +24,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.inventorymanager.data.ReconciliationRecord
 import com.example.inventorymanager.data.SoldItem
-import com.example.inventorymanager.ui.utils.CsvExportHelper
+import com.example.inventorymanager.ui.utils.DocumentExportHelper
+import com.example.inventorymanager.ui.utils.ExportFormat
 import com.example.inventorymanager.ui.utils.TimeUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -35,10 +40,35 @@ fun HistoryScreen(
     modifier: Modifier = Modifier
 ) {
     var reconciliationToDelete by remember { mutableStateOf<ReconciliationRecord?>(null) }
+    var targetRecordForExport by remember { mutableStateOf<ReconciliationRecord?>(null) }
+    var selectedExportFormat by remember { mutableStateOf<ExportFormat?>(null) }
+    var showExportFormatDialog by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    val createDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("*/*")
+    ) { uri ->
+        val format = selectedExportFormat
+        if (uri != null && format != null) {
+            val record = targetRecordForExport
+            val recordsToExport = if (record != null) listOf(record) else history
+            scope.launch(Dispatchers.IO) {
+                val success = DocumentExportHelper.exportToUri(context, uri, recordsToExport, format)
+                if (success) {
+                    snackbarHostState.showSnackbar("Export saved successfully!")
+                } else {
+                    snackbarHostState.showSnackbar("Failed to save export file")
+                }
+            }
+        }
+    }
 
     Scaffold(
         modifier = modifier,
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Sales History") },
@@ -50,10 +80,10 @@ fun HistoryScreen(
                 actions = {
                     if (history.isNotEmpty()) {
                         IconButton(onClick = {
-                            val csvContent = CsvExportHelper.generateHistoryCsv(history)
-                            CsvExportHelper.shareCsvFile(context, csvContent)
+                            targetRecordForExport = null
+                            showExportFormatDialog = true
                         }) {
-                            Icon(Icons.Default.FileDownload, contentDescription = "Export CSV")
+                            Icon(Icons.Default.FileDownload, contentDescription = "Export All History")
                         }
                     }
                 }
@@ -90,25 +120,92 @@ fun HistoryScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
-                items(history) { record ->
+                items(
+                    items = history,
+                    key = { it.id }
+                ) { record ->
                     HistoryRecordCard(
                         record = record,
-                        onDeleteClick = { reconciliationToDelete = record }
+                        onExportClick = {
+                            targetRecordForExport = record
+                            showExportFormatDialog = true
+                        },
+                        onDeleteClick = { 
+                            reconciliationToDelete = record 
+                        }
                     )
                 }
             }
         }
     }
 
+    if (showExportFormatDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportFormatDialog = false },
+            title = { Text("Export Format") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = if (targetRecordForExport != null) "Export selected sales log as:" else "Export all sales logs as:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    ExportFormat.entries.forEach { format ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedExportFormat = format
+                                    showExportFormatDialog = false
+                                    val suggestedName = DocumentExportHelper.generateSuggestedFileName(targetRecordForExport, format)
+                                    createDocumentLauncher.launch(suggestedName)
+                                },
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = format.displayName,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.FileDownload,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showExportFormatDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     if (reconciliationToDelete != null) {
         AlertDialog(
             onDismissRequest = { reconciliationToDelete = null },
             title = { Text("Delete Record?") },
-            text = { Text("This action will permanently remove this sales log. Dashboard totals will remain unchanged.") },
+            text = { Text("This action will permanently remove this sales log from MK${String.format(Locale.getDefault(), "%,.2f", reconciliationToDelete?.totalRevenue ?: 0.0)}. Dashboard totals will remain unchanged.") },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        reconciliationToDelete?.id?.let { onDeleteHistory(it) }
+                        reconciliationToDelete?.id?.let { id ->
+                            if (id.isNotEmpty()) {
+                                onDeleteHistory(id)
+                            }
+                        }
                         reconciliationToDelete = null
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
@@ -128,6 +225,7 @@ fun HistoryScreen(
 @Composable
 fun HistoryRecordCard(
     record: ReconciliationRecord,
+    onExportClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -158,6 +256,14 @@ fun HistoryRecordCard(
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onExportClick) {
+                        Icon(
+                            imageVector = Icons.Default.FileDownload,
+                            contentDescription = "Export Record",
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                     IconButton(onClick = onDeleteClick) {
                         Icon(
                             imageVector = Icons.Default.Delete,

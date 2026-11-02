@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.example.inventorymanager.ui.screens.LoginScreen
 import com.example.inventorymanager.ui.theme.InventoryManagerTheme
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -19,6 +20,7 @@ import com.google.firebase.auth.GoogleAuthProvider
 class LoginActivity : ComponentActivity() {
 
     private lateinit var auth: FirebaseAuth
+    private var setProcessing: ((Boolean) -> Unit)? = null
 
     private val googleSignInLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -29,13 +31,21 @@ class LoginActivity : ComponentActivity() {
                 val account = task.getResult(ApiException::class.java)!!
                 firebaseAuthWithGoogle(account.idToken!!)
             } catch (e: ApiException) {
+                setProcessing?.invoke(false)
                 Log.w("Login", "Google sign in failed", e)
                 Toast.makeText(this, "Google Sign-In failed", Toast.LENGTH_SHORT).show()
             }
+        } else {
+            setProcessing?.invoke(false)
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
+        var isCheckingAuth by mutableStateOf(true)
+
+        splashScreen.setKeepOnScreenCondition { isCheckingAuth }
+
         super.onCreate(savedInstanceState)
         auth = FirebaseAuth.getInstance()
 
@@ -44,14 +54,19 @@ class LoginActivity : ComponentActivity() {
             return
         }
 
+        isCheckingAuth = false
+
         setContent {
             InventoryManagerTheme {
                 var isProcessing by remember { mutableStateOf(false) }
                 var errorMessage by remember { mutableStateOf<String?>(null) }
 
+                setProcessing = { isProcessing = it }
+
                 LoginScreen(
                     onEmailLogin = { email, password ->
                         isProcessing = true
+                        errorMessage = null
                         auth.signInWithEmailAndPassword(email, password)
                             .addOnCompleteListener { task ->
                                 isProcessing = false
@@ -63,6 +78,8 @@ class LoginActivity : ComponentActivity() {
                             }
                     },
                     onGoogleLogin = {
+                        isProcessing = true
+                        errorMessage = null
                         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                             .requestIdToken(getString(R.string.default_web_client_id))
                             .requestEmail()
@@ -85,6 +102,7 @@ class LoginActivity : ComponentActivity() {
         val credential = GoogleAuthProvider.getCredential(idToken, null)
         auth.signInWithCredential(credential)
             .addOnCompleteListener(this) { task ->
+                setProcessing?.invoke(false)
                 if (task.isSuccessful) {
                     startMainActivity()
                 } else {

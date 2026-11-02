@@ -135,7 +135,9 @@ class ProductRepository {
                 batch.set(productRef, item)
             }
 
-            batch.commit().await()
+            kotlinx.coroutines.withTimeout(10000L) {
+                batch.commit().await()
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -231,7 +233,10 @@ class ProductRepository {
                 return@addSnapshotListener
             }
             if (snapshot != null) {
-                trySend(snapshot.toObjects(ReconciliationRecord::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE))
+                val records = snapshot.documents.mapNotNull { doc ->
+                    doc.toObject(ReconciliationRecord::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.copy(id = doc.id)
+                }
+                trySend(records)
             }
         }
         awaitClose { listener.remove() }

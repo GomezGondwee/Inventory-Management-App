@@ -45,6 +45,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.ui.graphics.Color
 import com.example.inventorymanager.data.InventoryItem
 import com.example.inventorymanager.data.ReconciliationRecord
+import com.example.inventorymanager.logic.FCMNotification
 
 sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
     object Home : Screen("home", "Home", Icons.Outlined.Home)
@@ -65,14 +66,21 @@ fun MainNavigationContainer(
     commission: Double,
     items: List<InventoryItem>,
     history: List<ReconciliationRecord>,
-    onSaveProduct: (InventoryItem) -> Unit,
+    notifications: List<FCMNotification>,
+    unreadCount: Int,
+    onSaveProduct: suspend (InventoryItem) -> Unit,
     onDeleteProduct: (String) -> Unit,
-    onReconcile: (Map<String, Int>, Double, Int) -> Unit,
+    onReconcile: suspend (Map<String, Int>, Double, Int) -> Result<Unit>,
     onReceiveDelivery: (Map<String, Int>) -> Unit,
     onUpdateEmpties: (Int) -> Unit,
     onDeleteHistory: (String) -> Unit,
+    onClearNotifications: () -> Unit,
     onSignOut: () -> Unit,
     snackbarHostState: SnackbarHostState,
+    isDarkMode: Boolean,
+    isStockAlertEnabled: Boolean,
+    onToggleDarkMode: (Boolean) -> Unit,
+    onToggleStockAlert: (Boolean) -> Unit,
     lastUpdated: String = "Just now"
 ) {
     val navController = rememberNavController()
@@ -94,6 +102,10 @@ fun MainNavigationContainer(
         drawerContent = {
             ModalDrawerSheet {
                 SettingsScreenContent(
+                    isDarkMode = isDarkMode,
+                    isStockAlertEnabled = isStockAlertEnabled,
+                    onToggleDarkMode = onToggleDarkMode,
+                    onToggleStockAlert = onToggleStockAlert,
                     onSignOut = {
                         scope.launch { drawerState.close() }
                         onSignOut()
@@ -183,13 +195,20 @@ fun MainNavigationContainer(
                 },
                 onUpdateEmpties = onUpdateEmpties,
                 onDeleteHistory = onDeleteHistory,
+                onClearNotifications = onClearNotifications,
                 onSettingsClick = {
                     scope.launch { drawerState.open() }
                 },
                 onNavigateBack = {
                     navController.popBackStack()
                 },
+                isDarkMode = isDarkMode,
+                isStockAlertEnabled = isStockAlertEnabled,
+                onToggleDarkMode = onToggleDarkMode,
+                onToggleStockAlert = onToggleStockAlert,
                 history = history,
+                notifications = notifications,
+                unreadCount = unreadCount,
                 lastUpdated = lastUpdated
             )
         }
@@ -207,9 +226,11 @@ fun AppNavHost(
     commission: Double,
     items: List<InventoryItem>,
     history: List<ReconciliationRecord>,
-    onSaveProduct: (InventoryItem) -> Unit,
+    notifications: List<FCMNotification>,
+    unreadCount: Int,
+    onSaveProduct: suspend (InventoryItem) -> Unit,
     onDeleteProduct: (String) -> Unit,
-    onReconcile: (Map<String, Int>, Double, Int) -> Unit,
+    onReconcile: suspend (Map<String, Int>, Double, Int) -> Result<Unit>,
     onReceiveDelivery: (Map<String, Int>) -> Unit,
     onSignOut: () -> Unit,
     onNavigateToInventory: () -> Unit,
@@ -218,8 +239,13 @@ fun AppNavHost(
     onNavigateToHome: () -> Unit,
     onUpdateEmpties: (Int) -> Unit,
     onDeleteHistory: (String) -> Unit,
+    onClearNotifications: () -> Unit,
+    onToggleDarkMode: (Boolean) -> Unit,
+    onToggleStockAlert: (Boolean) -> Unit,
     onSettingsClick: () -> Unit,
     onNavigateBack: () -> Unit,
+    isDarkMode: Boolean,
+    isStockAlertEnabled: Boolean,
     lastUpdated: String
 ) {
     var itemToEdit by remember { mutableStateOf<InventoryItem?>(null) }
@@ -237,10 +263,13 @@ fun AppNavHost(
                 stockNetValue = stockNetValue,
                 commission = commission,
                 lastUpdated = lastUpdated,
+                notifications = notifications,
+                unreadCount = unreadCount,
                 onReceiveDeliveryClick = onNavigateToDelivery,
                 onViewHistoryClick = onNavigateToHistory,
                 onSettingsClick = onSettingsClick,
                 onUpdateEmpties = onUpdateEmpties,
+                onClearNotifications = onClearNotifications,
                 onSignOut = onSignOut,
                 modifier = Modifier
             )
@@ -249,8 +278,11 @@ fun AppNavHost(
             SalesScreen(
                 items = items,
                 onConfirmReconciliation = { results, revenue, empties ->
-                    onReconcile(results, revenue, empties)
-                    onNavigateToHome()
+                    val result = onReconcile(results, revenue, empties)
+                    if (result.isSuccess) {
+                        onNavigateToHome()
+                    }
+                    result
                 },
                 onBack = onNavigateBack
             )
@@ -328,14 +360,21 @@ fun MainNavigationPreview() {
             commission = 67000.0,
             items = sampleItems,
             history = emptyList(),
+            notifications = emptyList(),
+            unreadCount = 0,
             onSaveProduct = {},
             onDeleteProduct = {},
-            onReconcile = { _, _, _ -> },
+            onReconcile = { _, _, _ -> Result.success(Unit) },
             onReceiveDelivery = {},
             onUpdateEmpties = {},
             onDeleteHistory = {},
+            onClearNotifications = {},
             onSignOut = {},
-            snackbarHostState = androidx.compose.material3.SnackbarHostState()
+            isDarkMode = false,
+            isStockAlertEnabled = true,
+            onToggleDarkMode = {},
+            onToggleStockAlert = {},
+            snackbarHostState = SnackbarHostState()
         )
     }
 }

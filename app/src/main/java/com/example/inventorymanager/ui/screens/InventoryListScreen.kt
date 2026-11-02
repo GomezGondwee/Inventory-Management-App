@@ -143,10 +143,33 @@ fun InventoryListScreen(
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
             ) {
                 categories.forEach { category ->
+                    val totalQty = when (category) {
+                        "All" -> items.sumOf { it.quantity }
+                        else -> items.filter { it.category.equals(category, ignoreCase = true) }.sumOf { it.quantity }
+                    }
+                    val isSelected = selectedCategory == category
+
                     FilterChip(
-                        selected = selectedCategory == category,
+                        selected = isSelected,
                         onClick = { selectedCategory = category },
-                        label = { Text(category) },
+                        label = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(category)
+                                androidx.compose.material3.Badge(
+                                    containerColor = if (isSelected) Color.White.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                ) {
+                                    Text(
+                                        text = totalQty.toString(),
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 2.dp)
+                                    )
+                                }
+                            }
+                        },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Color(0xFFD32F2F),
                             selectedLabelColor = Color.White
@@ -220,13 +243,16 @@ fun InventoryItemRow(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Product Image using Coil
             if (item.imageUri != null) {
                 AsyncImage(
                     model = item.imageUri,
@@ -255,13 +281,6 @@ fun InventoryItemRow(
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val categoryIcon = if (item.category == "Glass") Icons.Default.WineBar else Icons.Default.Liquor
-                    Icon(
-                        imageVector = categoryIcon,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.secondary
-                    )
-                    Spacer(Modifier.width(4.dp))
                     Text(
                         text = item.category,
                         style = MaterialTheme.typography.labelMedium,
@@ -279,12 +298,6 @@ fun InventoryItemRow(
                         modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.Inventory2,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.outline
-                        )
                         Spacer(Modifier.width(4.dp))
                         Text(
                             text = "Qty: ${item.quantity}",

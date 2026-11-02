@@ -10,7 +10,7 @@ import com.example.inventorymanager.ui.theme.InventoryManagerTheme
 @Composable
 fun SalesScreen(
     items: List<InventoryItem>,
-    onConfirmReconciliation: (Map<String, Int>, Double, Int) -> Unit,
+    onConfirmReconciliation: suspend (Map<String, Int>, Double, Int) -> Result<Unit>,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
