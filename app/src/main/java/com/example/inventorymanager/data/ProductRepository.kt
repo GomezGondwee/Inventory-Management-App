@@ -71,7 +71,9 @@ class ProductRepository {
                 "totalSold" to item.totalSold,
                 "lastUpdated" to FieldValue.serverTimestamp()
             )
-            val docRef = productsCollection.add(data).await()
+            val docRef = kotlinx.coroutines.withTimeout(10000L) {
+                productsCollection.add(data).await()
+            }
             Result.success(docRef.id)
         } catch (e: Exception) {
             Result.failure(e)
@@ -81,7 +83,9 @@ class ProductRepository {
 
     suspend fun updateProduct(item: InventoryItem): Result<Unit> {
         return try {
-            productsCollection.document(item.id).set(item).await()
+            kotlinx.coroutines.withTimeout(10000L) {
+                productsCollection.document(item.id).set(item).await()
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -152,7 +156,9 @@ class ProductRepository {
                 batch.update(docRef, "quantity", FieldValue.increment(receivedQuantity.toLong()))
                 batch.update(docRef, "lastUpdated", FieldValue.serverTimestamp())
             }
-            batch.commit().await()
+            kotlinx.coroutines.withTimeout(10000L) {
+                batch.commit().await()
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -165,9 +171,11 @@ class ProductRepository {
             val fileName = "images/${UUID.randomUUID()}.jpg"
             val ref = storage.reference.child(fileName)
             
-            ref.putFile(file).await()
-            val downloadUrl = ref.downloadUrl.await()
-            Result.success(downloadUrl.toString())
+            val downloadUrl = kotlinx.coroutines.withTimeout(15000L) {
+                ref.putFile(file).await()
+                ref.downloadUrl.await().toString()
+            }
+            Result.success(downloadUrl)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -175,7 +183,9 @@ class ProductRepository {
 
     suspend fun deleteProduct(id: String): Result<Unit> {
         return try {
-            productsCollection.document(id).delete().await()
+            kotlinx.coroutines.withTimeout(10000L) {
+                productsCollection.document(id).delete().await()
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

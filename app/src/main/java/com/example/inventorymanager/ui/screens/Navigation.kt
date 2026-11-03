@@ -68,7 +68,7 @@ fun MainNavigationContainer(
     history: List<ReconciliationRecord>,
     notifications: List<FCMNotification>,
     unreadCount: Int,
-    onSaveProduct: suspend (InventoryItem) -> Unit,
+    onSaveProduct: suspend (InventoryItem) -> Result<Unit>,
     onDeleteProduct: (String) -> Unit,
     onReconcile: suspend (Map<String, Int>, Double, Int) -> Result<Unit>,
     onReceiveDelivery: (Map<String, Int>) -> Unit,
@@ -228,7 +228,7 @@ fun AppNavHost(
     history: List<ReconciliationRecord>,
     notifications: List<FCMNotification>,
     unreadCount: Int,
-    onSaveProduct: suspend (InventoryItem) -> Unit,
+    onSaveProduct: suspend (InventoryItem) -> Result<Unit>,
     onDeleteProduct: (String) -> Unit,
     onReconcile: suspend (Map<String, Int>, Double, Int) -> Result<Unit>,
     onReceiveDelivery: (Map<String, Int>) -> Unit,
@@ -291,9 +291,12 @@ fun AppNavHost(
             AddProductScreen(
                 initialItem = itemToEdit,
                 onSave = { 
-                    onSaveProduct(it)
-                    itemToEdit = null
-                    onNavigateToInventory()
+                    val result = onSaveProduct(it)
+                    if (result.isSuccess) {
+                        itemToEdit = null
+                        onNavigateToInventory()
+                    }
+                    result
                 },
                 onBack = {
                     itemToEdit = null
@@ -362,7 +365,7 @@ fun MainNavigationPreview() {
             history = emptyList(),
             notifications = emptyList(),
             unreadCount = 0,
-            onSaveProduct = {},
+            onSaveProduct = { Result.success(Unit) },
             onDeleteProduct = {},
             onReconcile = { _, _, _ -> Result.success(Unit) },
             onReceiveDelivery = {},

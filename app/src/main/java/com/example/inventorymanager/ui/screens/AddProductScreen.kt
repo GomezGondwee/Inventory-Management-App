@@ -5,6 +5,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -96,7 +98,7 @@ fun CircleIcon(
 @Composable
 fun AddProductScreen(
     initialItem: InventoryItem? = null,
-    onSave: suspend (InventoryItem) -> Unit,
+    onSave: suspend (InventoryItem) -> Result<Unit>,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -110,6 +112,8 @@ fun AddProductScreen(
 
     var nameError by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
 
     val context = LocalContext.current
@@ -127,6 +131,7 @@ fun AddProductScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
+            snackbarHost = { androidx.compose.material3.SnackbarHost(hostState = snackbarHostState) },
             topBar = {
                 TopAppBar(
                     title = { Text(if (initialItem == null) "Add New Product" else "Edit Product") },
@@ -146,6 +151,7 @@ fun AddProductScreen(
                 modifier = modifier
                     .fillMaxSize()
                     .padding(innerPadding)
+                    .verticalScroll(scrollState)
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -275,7 +281,7 @@ fun AddProductScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Button(
                     onClick = {
@@ -294,7 +300,13 @@ fun AddProductScreen(
                             )
                             scope.launch {
                                 try {
-                                    onSave(itemToSave)
+                                    val result = onSave(itemToSave)
+                                    if (result.isFailure) {
+                                        val errorMsg = result.exceptionOrNull()?.localizedMessage ?: "Failed to save product"
+                                        snackbarHostState.showSnackbar(errorMsg)
+                                    }
+                                } catch (e: Exception) {
+                                    snackbarHostState.showSnackbar(e.localizedMessage ?: "Failed to save product")
                                 } finally {
                                     isSaving = false
                                 }
@@ -361,6 +373,6 @@ fun AddProductScreen(
 @Composable
 fun AddProductScreenPreview() {
     MaterialTheme {
-        AddProductScreen(onSave = {}, onBack = {})
+        AddProductScreen(onSave = { Result.success(Unit) }, onBack = {})
     }
 }

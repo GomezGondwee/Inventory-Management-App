@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
                 val notifications by InAppNotificationManager.notifications.collectAsState(initial = emptyList())
                 val unreadCount by InAppNotificationManager.unreadCount.collectAsState(initial = 0)
 
-                // Track which items have already triggered a notification in this session
+
                 val notifiedItems = remember { mutableStateMapOf<String, Int>() }
 
                 LaunchedEffect(items, isStockAlertEnabled) {
@@ -98,7 +98,6 @@ class MainActivity : ComponentActivity() {
                             val hasBeenTracked = notifiedItems.containsKey(item.id)
                             val lastKnownQuantity = notifiedItems[item.id] ?: item.quantity
 
-                            // Trigger notification only if item was already tracked this session AND dropped below 20
                             if (hasBeenTracked && item.quantity < 20 && lastKnownQuantity >= 20) {
                                 val title = "Low Stock Alert! ⚠️"
                                 val body = "\"${item.name}\" is running low. Only ${item.quantity} left!"
@@ -115,7 +114,6 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            // Update tracking baseline
                             notifiedItems[item.id] = item.quantity
                         }
                     }
@@ -180,7 +178,8 @@ class MainActivity : ComponentActivity() {
                         if (finalItem.id.isNotEmpty()) {
                             repository.updateProduct(finalItem)
                         } else {
-                            repository.addProduct(finalItem)
+                            val addResult = repository.addProduct(finalItem)
+                            if (addResult.isSuccess) Result.success(Unit) else Result.failure(addResult.exceptionOrNull() ?: Exception("Failed to save product"))
                         }
                     },
                     onDeleteProduct = { productId ->

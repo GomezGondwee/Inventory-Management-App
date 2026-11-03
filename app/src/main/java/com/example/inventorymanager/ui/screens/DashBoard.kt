@@ -165,7 +165,8 @@ fun DashBoardScreen(
             modifier = Modifier
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = 24.dp)
         ) {
             item {
                 Spacer(modifier = Modifier.padding(top = 4.dp))
@@ -222,6 +223,9 @@ fun DashBoardScreen(
                     onClick = onViewHistoryClick,
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
             }
 
         }
