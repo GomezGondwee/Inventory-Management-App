@@ -24,12 +24,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.inventorymanager.R
 
 @Composable
 fun LoginScreen(
-    onEmailLogin: (String, String) -> Unit,
+    onEmailLogin: (email: String, password: String, isSignUp: Boolean) -> Unit,
     onGoogleLogin: () -> Unit,
     isProcessing: Boolean = false,
     errorMessage: String? = null
@@ -37,6 +36,7 @@ fun LoginScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var isSignUpMode by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -49,7 +49,7 @@ fun LoginScreen(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(bottom = 40.dp)
+                modifier = Modifier.padding(bottom = 32.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Inventory2,
@@ -72,7 +72,8 @@ fun LoginScreen(
                 label = { Text("Email Address") },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                singleLine = true
+                singleLine = true,
+                enabled = !isProcessing
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -90,7 +91,8 @@ fun LoginScreen(
                         Icon(imageVector = image, contentDescription = null)
                     }
                 },
-                singleLine = true
+                singleLine = true,
+                enabled = !isProcessing
             )
 
             if (errorMessage != null) {
@@ -98,27 +100,44 @@ fun LoginScreen(
                     text = errorMessage,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 8.dp).align(Alignment.Start)
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .align(Alignment.Start)
                 )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
-                onClick = { onEmailLogin(email, password) },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
+                onClick = { onEmailLogin(email.trim(), password.trim(), isSignUpMode) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
                 enabled = !isProcessing && email.isNotBlank() && password.isNotBlank(),
                 shape = MaterialTheme.shapes.medium,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
             ) {
-                Text("Sign In")
+                Text(if (isSignUpMode) "Create Account" else "Sign In")
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            TextButton(
+                onClick = { isSignUpMode = !isSignUpMode },
+                enabled = !isProcessing,
+                modifier = Modifier.padding(top = 4.dp)
+            ) {
+                Text(
+                    text = if (isSignUpMode) "Already have an account? Sign In" else "Don't have an account? Sign Up",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(vertical = 16.dp)
+                modifier = Modifier.padding(vertical = 12.dp)
             ) {
                 HorizontalDivider(modifier = Modifier.weight(1f))
                 Text(
@@ -131,7 +150,9 @@ fun LoginScreen(
 
             OutlinedButton(
                 onClick = onGoogleLogin,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
                 enabled = !isProcessing,
                 shape = MaterialTheme.shapes.medium
             ) {
@@ -237,7 +258,7 @@ fun LoginLoadingOverlay() {
 @Composable
 fun LoginScreenPreview() {
     MaterialTheme {
-        LoginScreen(onEmailLogin = { _, _ -> }, onGoogleLogin = {})
+        LoginScreen(onEmailLogin = { _, _, _ -> }, onGoogleLogin = {})
     }
 }
 
@@ -245,6 +266,6 @@ fun LoginScreenPreview() {
 @Composable
 fun LoginScreenLoadingPreview() {
     MaterialTheme {
-        LoginScreen(onEmailLogin = { _, _ -> }, onGoogleLogin = {}, isProcessing = true)
+        LoginScreen(onEmailLogin = { _, _, _ -> }, onGoogleLogin = {}, isProcessing = true)
     }
 }

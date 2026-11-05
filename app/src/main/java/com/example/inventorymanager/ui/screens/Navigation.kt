@@ -71,7 +71,7 @@ fun MainNavigationContainer(
     onSaveProduct: suspend (InventoryItem) -> Result<Unit>,
     onDeleteProduct: (String) -> Unit,
     onReconcile: suspend (Map<String, Int>, Double, Int) -> Result<Unit>,
-    onReceiveDelivery: (Map<String, Int>) -> Unit,
+    onReceiveDelivery: suspend (Map<String, Int>) -> Result<Unit>,
     onUpdateEmpties: (Int) -> Unit,
     onDeleteHistory: (String) -> Unit,
     onClearNotifications: () -> Unit,
@@ -179,7 +179,11 @@ fun MainNavigationContainer(
                 onSignOut = onSignOut,
                 onNavigateToInventory = {
                     navController.navigate(Screen.Inventory.route) {
-                        popUpTo(Screen.Home.route)
+                        popUpTo(navController.graph.startDestinationId) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
                     }
                 },
                 onNavigateToDelivery = {
@@ -190,7 +194,11 @@ fun MainNavigationContainer(
                 },
                 onNavigateToHome = {
                     navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = true }
+                        popUpTo(navController.graph.startDestinationId) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
                     }
                 },
                 onUpdateEmpties = onUpdateEmpties,
@@ -231,7 +239,7 @@ fun AppNavHost(
     onSaveProduct: suspend (InventoryItem) -> Result<Unit>,
     onDeleteProduct: (String) -> Unit,
     onReconcile: suspend (Map<String, Int>, Double, Int) -> Result<Unit>,
-    onReceiveDelivery: (Map<String, Int>) -> Unit,
+    onReceiveDelivery: suspend (Map<String, Int>) -> Result<Unit>,
     onSignOut: () -> Unit,
     onNavigateToInventory: () -> Unit,
     onNavigateToDelivery: () -> Unit,
@@ -324,6 +332,7 @@ fun AppNavHost(
         composable(Screen.Reports.route) {
             ReportsScreen(
                 items = items,
+                history = history,
                 onBack = onNavigateBack
             )
         }
@@ -338,8 +347,11 @@ fun AppNavHost(
             DeliveryScreen(
                 items = items,
                 onConfirmDelivery = { results ->
-                    onReceiveDelivery(results)
-                    onNavigateToInventory()
+                    val result = onReceiveDelivery(results)
+                    if (result.isSuccess) {
+                        onNavigateToInventory()
+                    }
+                    result
                 },
                 onBack = onNavigateBack
             )
@@ -368,7 +380,7 @@ fun MainNavigationPreview() {
             onSaveProduct = { Result.success(Unit) },
             onDeleteProduct = {},
             onReconcile = { _, _, _ -> Result.success(Unit) },
-            onReceiveDelivery = {},
+            onReceiveDelivery = { Result.success(Unit) },
             onUpdateEmpties = {},
             onDeleteHistory = {},
             onClearNotifications = {},

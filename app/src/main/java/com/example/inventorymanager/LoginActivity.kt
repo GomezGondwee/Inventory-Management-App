@@ -64,18 +64,52 @@ class LoginActivity : ComponentActivity() {
                 setProcessing = { isProcessing = it }
 
                 LoginScreen(
-                    onEmailLogin = { email, password ->
+                    onEmailLogin = { rawEmail, rawPassword, isSignUp ->
+                        val email = rawEmail.trim()
+                        val password = rawPassword.trim()
+                        if (email.isBlank() || password.isBlank()) {
+                            errorMessage = "Email and password cannot be empty"
+                            return@LoginScreen
+                        }
+
                         isProcessing = true
                         errorMessage = null
-                        auth.signInWithEmailAndPassword(email, password)
-                            .addOnCompleteListener { task ->
-                                isProcessing = false
-                                if (task.isSuccessful) {
-                                    startMainActivity()
-                                } else {
-                                    errorMessage = task.exception?.localizedMessage ?: "Login failed"
+
+                        if (isSignUp) {
+                            auth.createUserWithEmailAndPassword(email, password)
+                                .addOnCompleteListener { task ->
+                                    isProcessing = false
+                                    if (task.isSuccessful) {
+                                        startMainActivity()
+                                    } else {
+                                        errorMessage = task.exception?.localizedMessage ?: "Account creation failed"
+                                    }
                                 }
-                            }
+                        } else {
+                            auth.signInWithEmailAndPassword(email, password)
+                                .addOnCompleteListener { task ->
+                                    if (task.isSuccessful) {
+                                        isProcessing = false
+                                        startMainActivity()
+                                    } else {
+                                        val exception = task.exception
+                                        if (exception is com.google.firebase.auth.FirebaseAuthInvalidUserException) {
+                                            auth.createUserWithEmailAndPassword(email, password)
+                                                .addOnCompleteListener { createTask ->
+                                                    isProcessing = false
+                                                    if (createTask.isSuccessful) {
+                                                        startMainActivity()
+                                                    } else {
+                                                        errorMessage = createTask.exception?.localizedMessage ?: "Account creation failed"
+                                                    }
+                                                }
+                                        } else {
+                                            isProcessing = false
+                                            errorMessage = exception?.localizedMessage ?: "Login failed"
+                                        }
+                                    }
+                                }
+                        }
                     },
                     onGoogleLogin = {
                         isProcessing = true

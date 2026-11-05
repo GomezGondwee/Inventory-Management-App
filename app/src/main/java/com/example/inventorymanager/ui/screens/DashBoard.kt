@@ -225,7 +225,7 @@ fun DashBoardScreen(
                 )
             }
             item {
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
         }
@@ -560,7 +560,7 @@ fun SalesCard(amount: Double, commission: Double, lastUpdated: String, modifier:
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Total Sales",
+                    text = "Today's Sales",
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.White.copy(alpha = 0.9f),
                     fontWeight = FontWeight.Bold
@@ -577,7 +577,7 @@ fun SalesCard(amount: Double, commission: Double, lastUpdated: String, modifier:
             )
 
             Text(
-                text = "Daily Commission: MK$formattedCommission",
+                text = " Commission: MK$formattedCommission",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.85f),
                 modifier = Modifier.padding(top = 4.dp, start = 2.dp)

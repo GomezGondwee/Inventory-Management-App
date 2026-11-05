@@ -201,9 +201,7 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     onReceiveDelivery = { deliveryMap ->
-                        scope.launch {
-                            repository.receiveDelivery(deliveryMap)
-                        }
+                        repository.receiveDelivery(deliveryMap)
                     },
                     onUpdateEmpties = { newTotal ->
                         scope.launch {
